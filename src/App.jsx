@@ -1,3060 +1,11 @@
-// import React, { useState, useRef, useEffect } from 'react';
-// import { 
-//   Terminal, 
-//   Settings, 
-//   Download, 
-//   Trash2, 
-//   Play, 
-//   Square, 
-//   Highlighter, 
-//   Send,
-//   AlertCircle,
-//   Zap,
-//   Activity,
-//   Cpu,
-//   Command,
-//   Radio,
-//   Binary,
-//   Copy,
-//   Plus,
-//   X,
-//   Pause,
-//   Edit2,
-//   Save,
-//   RefreshCw,
-//   MoreHorizontal,
-//   Plug,
-//   Search,
-//   Usb,
-//   Monitor,
-//   Unplug,
-//   Hash,
-//   Filter,
-//   ChevronDown,
-//   Check,
-//   ArrowUp,
-//   ArrowDown
-// } from 'lucide-react';
-
-// export default function App() {
-//   // --- 状态定义 ---
-
-//   // 串口相关
-//   const [port, setPort] = useState(null);
-//   const [availablePorts, setAvailablePorts] = useState([]); 
-//   const [isConnected, setIsConnected] = useState(false);
-  
-//   // 核心引用
-//   const readerRef = useRef(null);
-//   const writerRef = useRef(null);
-//   const readableStreamClosedRef = useRef(null);
-//   const writableStreamClosedRef = useRef(null);
-//   const baudRef = useRef(null);
-//   const bufferRef = useRef('');
-  
-//   // 界面交互状态
-//   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
-//   const [isBaudDropdownOpen, setIsBaudDropdownOpen] = useState(false);
-//   const [portSearchQuery, setPortSearchQuery] = useState('');
-//   const [isPaused, setIsPaused] = useState(false);
-//   const isPausedRef = useRef(false);
-
-//   // 日志相关
-//   const [logs, setLogs] = useState([]);
-//   const [autoScroll, setAutoScroll] = useState(true);
-//   const logsEndRef = useRef(null);
-//   const [viewMode, setViewMode] = useState('ascii'); // 'ascii' | 'hex'
-//   const [logFilter, setLogFilter] = useState('');
-
-//   // --- 持久化状态 (localStorage) - 增强版 ---
-//   const usePersistedState = (key, defaultValue) => {
-//     const [state, setState] = useState(() => {
-//       try {
-//         const storedValue = localStorage.getItem(key);
-//         return storedValue ? JSON.parse(storedValue) : defaultValue;
-//       } catch (error) {
-//         console.error(`Error parsing localStorage key "${key}":`, error);
-//         return defaultValue;
-//       }
-//     });
-
-//     useEffect(() => {
-//       try {
-//         localStorage.setItem(key, JSON.stringify(state));
-//       } catch (error) {
-//         console.error(`Error setting localStorage key "${key}":`, error);
-//       }
-//     }, [key, state]);
-
-//     return [state, setState];
-//   };
-
-//   // 使用持久化状态
-//   const [baudRate, setBaudRate] = usePersistedState('serial_baudrate', 115200);
-//   const [highlightKeyword, setHighlightKeyword] = usePersistedState('serial_highlight_kw', '');
-//   const [highlightColor, setHighlightColor] = usePersistedState('serial_highlight_color', 'text-amber-400 bg-amber-400/10 border-amber-400/20');
-//   const [quickCommands, setQuickCommands] = usePersistedState('serial_quick_cmds', [
-//     { id: 1, label: 'AT Test', cmd: 'AT' },
-//     { id: 2, label: 'Reset', cmd: 'AT+RST' },
-//     { id: 3, label: 'Version', cmd: 'AT+GMR' },
-//     { id: 4, label: 'Scan', cmd: 'AT+CWLAP' },
-//     { id: 5, label: 'IP Addr', cmd: 'AT+CIFSR' },
-//   ]);
-//   const [useHexSend, setUseHexSend] = usePersistedState('serial_use_hex_send', false);
-//   const [lineEnding, setLineEnding] = usePersistedState('serial_line_ending', '\\n'); // none, \n, \r, \r\n
-
-//   // 发送相关
-//   const [inputText, setInputText] = useState('');
-//   const [showTimestamp, setShowTimestamp] = useState(true);
-//   const [isEditingCmds, setIsEditingCmds] = useState(false);
-//   const [copyFeedback, setCopyFeedback] = useState(null);
-
-//   // 历史记录相关
-//   const [sendHistory, setSendHistory] = useState([]);
-//   const [historyIndex, setHistoryIndex] = useState(-1); // -1 表示当前输入
-
-//   // 浏览器兼容性
-//   const isWebSerialSupported = 'serial' in navigator;
-
-//   // --- Effect Hooks ---
-
-//   useEffect(() => {
-//     document.title = "SerialFlux - Pro Web Debugger";
-//   }, []);
-
-//   useEffect(() => {
-//     isPausedRef.current = isPaused;
-//   }, [isPaused]);
-
-//   // 点击外部关闭波特率下拉
-//   useEffect(() => {
-//     const handleClickOutside = (event) => {
-//       if (baudRef.current && !baudRef.current.contains(event.target)) {
-//         setIsBaudDropdownOpen(false);
-//       }
-//     };
-//     document.addEventListener('mousedown', handleClickOutside);
-//     return () => document.removeEventListener('mousedown', handleClickOutside);
-//   }, []);
-
-//   // 端口监听
-//   useEffect(() => {
-//     if (!isWebSerialSupported) return;
-//     const updatePorts = async () => {
-//       try {
-//         const ports = await navigator.serial.getPorts();
-//         setAvailablePorts(ports);
-//       } catch (e) { console.error(e); }
-//     };
-//     updatePorts();
-//     const handleConnectEvent = () => updatePorts();
-//     const handleDisconnectEvent = (e) => {
-//       updatePorts();
-//       if (port === e.target) disconnectPort();
-//     };
-//     navigator.serial.addEventListener('connect', handleConnectEvent);
-//     navigator.serial.addEventListener('disconnect', handleDisconnectEvent);
-//     return () => {
-//       navigator.serial.removeEventListener('connect', handleConnectEvent);
-//       navigator.serial.removeEventListener('disconnect', handleDisconnectEvent);
-//     };
-//   }, [port]);
-
-//   // 自动滚动
-//   useEffect(() => {
-//     if (autoScroll && !isPaused && logsEndRef.current && !logFilter) {
-//       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-//     }
-//   }, [logs, autoScroll, viewMode, isPaused, logFilter]);
-
-//   // --- 核心逻辑 ---
-
-//   const openPort = async (selectedPort) => {
-//     try {
-//       if (!selectedPort) return;
-//       if (port && isConnected) await disconnectPort();
-
-//       // 确保 baudRate 是数字，防止从 localStorage 读到奇怪的东西导致连接失败
-//       const baud = parseInt(baudRate) || 115200;
-//       await selectedPort.open({ baudRate: baud });
-      
-//       setPort(selectedPort);
-//       setIsConnected(true);
-//       setIsPaused(false);
-//       setIsConnectModalOpen(false);
-//       bufferRef.current = '';
-
-//       const ports = await navigator.serial.getPorts();
-//       setAvailablePorts(ports);
-      
-//       const textDecoder = new TextDecoderStream();
-//       const readableStreamClosed = selectedPort.readable.pipeTo(textDecoder.writable);
-//       readableStreamClosedRef.current = readableStreamClosed;
-//       const reader = textDecoder.readable.getReader();
-//       readerRef.current = reader;
-
-//       const textEncoder = new TextEncoderStream();
-//       const writableStreamClosed = textEncoder.readable.pipeTo(selectedPort.writable);
-//       writableStreamClosedRef.current = writableStreamClosed;
-//       const writer = textEncoder.writable.getWriter();
-//       writerRef.current = writer;
-
-//       readLoop();
-//     } catch (error) {
-//       console.error('Connection failed:', error);
-//       alert('Connection failed: ' + error.message);
-//     }
-//   };
-
-//   const readLoop = async () => {
-//     try {
-//       while (true) {
-//         const { value, done } = await readerRef.current.read();
-//         if (done) {
-//           readerRef.current.releaseLock();
-//           break;
-//         }
-//         if (value) processIncomingData(value);
-//       }
-//     } catch (error) { console.error('Read error:', error); }
-//   };
-
-//   const processIncomingData = (chunk) => {
-//     bufferRef.current += chunk;
-//     if (bufferRef.current.includes('\n')) {
-//       const lines = bufferRef.current.split(/\r?\n/);
-//       const completeLines = lines.slice(0, -1);
-//       bufferRef.current = lines[lines.length - 1];
-//       if (!isPausedRef.current && completeLines.length > 0) {
-//         addLogs(completeLines, 'rx');
-//       }
-//     }
-//   };
-
-//   const disconnectPort = async () => {
-//     try {
-//       if (readerRef.current) {
-//         await readerRef.current.cancel();
-//         await readableStreamClosedRef.current.catch(() => {});
-//         readerRef.current = null;
-//       }
-//       if (writerRef.current) {
-//         await writerRef.current.close();
-//         await writableStreamClosedRef.current;
-//         writerRef.current = null;
-//       }
-//       if (port) {
-//         await port.close();
-//         setPort(null);
-//         setIsConnected(false);
-//       }
-//     } catch (error) { console.error('Disconnect error:', error); }
-//   };
-
-//   const addLogs = (newLines, type) => {
-//     setLogs(prev => {
-//       const newEntries = newLines.map(text => ({
-//         id: Date.now() + Math.random(),
-//         timestamp: new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 }),
-//         text: text,
-//         type: type 
-//       }));
-//       const updated = [...prev, ...newEntries];
-//       if (updated.length > 2000) return updated.slice(-2000);
-//       return updated;
-//     });
-//   };
-
-//   // --- 导出数据功能 (修复 ReferenceError) ---
-//   const exportData = () => {
-//     const content = logs.map(l => `[${l.timestamp}] ${l.type === 'tx' ? 'TX' : 'RX'}: ${l.text}`).join('\n');
-//     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-//     const url = URL.createObjectURL(blob);
-//     const link = document.createElement('a');
-//     link.href = url;
-//     link.download = `serial_log_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.txt`;
-//     document.body.appendChild(link);
-//     link.click();
-//     document.body.removeChild(link);
-//   };
-
-//   // --- 发送逻辑 ---
-
-//   const sendData = async (textToSend = null) => {
-//     const rawData = textToSend !== null ? textToSend : inputText;
-//     if (!port || !writerRef.current || !rawData) return;
-
-//     if (textToSend === null && rawData.trim() !== '') {
-//         setSendHistory(prev => {
-//             const newHistory = [rawData, ...prev].slice(0, 50); 
-//             return newHistory;
-//         });
-//         setHistoryIndex(-1); 
-//     }
-
-//     try {
-//       if (useHexSend) {
-//           // HEX 模式简单模拟
-//           alert("提示：当前 Web 架构主要针对文本调试。HEX 模式发送暂未完全实装 (需重写底层流管道)。");
-//       } else {
-//           // ASCII 模式发送
-//           let finalData = rawData;
-//           if (lineEnding === '\\n') finalData += '\n';
-//           else if (lineEnding === '\\r') finalData += '\r';
-//           else if (lineEnding === '\\r\\n') finalData += '\r\n';
-          
-//           await writerRef.current.write(finalData);
-//           addLogs([finalData.replace(/\r/g, '').replace(/\n/g, '')], 'tx'); 
-//       }
-      
-//       if (textToSend === null) setInputText(''); 
-//     } catch (error) {
-//       console.error('Send failed:', error);
-//     }
-//   };
-
-//   const handleInputKeyDown = (e) => {
-//     if (e.key === 'Enter') {
-//         if (e.ctrlKey) {
-//             sendData();
-//         }
-//     } else if (e.key === 'ArrowUp') {
-//         e.preventDefault();
-//         if (sendHistory.length > 0) {
-//             const nextIndex = Math.min(historyIndex + 1, sendHistory.length - 1);
-//             setHistoryIndex(nextIndex);
-//             setInputText(sendHistory[nextIndex]);
-//         }
-//     } else if (e.key === 'ArrowDown') {
-//         e.preventDefault();
-//         if (historyIndex > 0) {
-//             const nextIndex = historyIndex - 1;
-//             setHistoryIndex(nextIndex);
-//             setInputText(sendHistory[nextIndex]);
-//         } else if (historyIndex === 0) {
-//             setHistoryIndex(-1);
-//             setInputText(''); 
-//         }
-//     }
-//   };
-
-//   // --- 辅助函数 ---
-
-//   const forgetPort = async (e, portToForget) => {
-//     e.stopPropagation();
-//     try {
-//         if (portToForget === port && isConnected) await disconnectPort();
-//         await portToForget.forget();
-//         const ports = await navigator.serial.getPorts();
-//         setAvailablePorts(ports);
-//     } catch (error) {
-//         alert('Could not forget port. Require Chrome 103+.');
-//     }
-//   };
-
-//   const requestNewPort = async () => {
-//     try {
-//       const selectedPort = await navigator.serial.requestPort();
-//       openPort(selectedPort);
-//     } catch (error) { console.log('User cancelled'); }
-//   };
-
-//   const toHexDisplay = (str) => {
-//     let result = '';
-//     for (let i = 0; i < str.length; i++) {
-//       const hex = str.charCodeAt(i).toString(16).toUpperCase().padStart(2, '0');
-//       result += hex + ' ';
-//     }
-//     return result.trim();
-//   };
-
-//   const copyToClipboard = (text) => {
-//     navigator.clipboard.writeText(text);
-//     setCopyFeedback(text.substring(0, 20) + '...');
-//     setTimeout(() => setCopyFeedback(null), 1500);
-//   };
-
-//   const renderLogContent = (text) => {
-//     // 强制转换为字符串，防止对象渲染错误
-//     const safeText = String(text);
-    
-//     const contentToRender = viewMode === 'hex' ? toHexDisplay(safeText) : safeText;
-//     if (!highlightKeyword || viewMode === 'hex') return contentToRender;
-//     const parts = contentToRender.split(new RegExp(`(${highlightKeyword})`, 'gi'));
-//     return (
-//       <span>
-//         {parts.map((part, i) => 
-//           part.toLowerCase() === highlightKeyword.toLowerCase() ? (
-//             <span key={i} className={`${highlightColor} font-bold px-1.5 py-0.5 rounded border text-[11px] tracking-wide mx-0.5 shadow-[0_0_10px_rgba(0,0,0,0.2)]`}>
-//               {part}
-//             </span>
-//           ) : (part)
-//         )}
-//       </span>
-//     );
-//   };
-
-//   // 格式化相关
-//   const getPortInfo = (port, index) => {
-//     const info = port.getInfo();
-//     if (info.usbVendorId && info.usbProductId) {
-//       const vid = info.usbVendorId.toString(16).toUpperCase().padStart(4, '0');
-//       const pid = info.usbProductId.toString(16).toUpperCase().padStart(4, '0');
-//       return { name: `USB Serial Device`, meta: `VID:${vid} PID:${pid}`, id: `${vid}:${pid}` };
-//     }
-//     return { name: `Serial Port ${index + 1}`, meta: 'Generic Device', id: `generic-${index}` };
-//   };
-
-//   const filteredPorts = availablePorts.filter((p, index) => {
-//     if (!portSearchQuery) return true;
-//     const info = getPortInfo(p, index);
-//     const searchLower = portSearchQuery.toLowerCase();
-//     return info.name.toLowerCase().includes(searchLower) || info.meta.toLowerCase().includes(searchLower);
-//   });
-
-//   const filteredLogs = logs.filter(log => {
-//     if (!logFilter) return true;
-//     // 强制转换防止崩溃
-//     return String(log.text).toLowerCase().includes(logFilter.toLowerCase());
-//   });
-
-//   const updateQuickCommand = (id, field, value) => {
-//     setQuickCommands(prev => prev.map(cmd => cmd.id === id ? { ...cmd, [field]: value } : cmd));
-//   };
-//   const addQuickCommand = () => {
-//     const newId = Math.max(0, ...quickCommands.map(c => c.id)) + 1;
-//     setQuickCommands([...quickCommands, { id: newId, label: 'Cmd', cmd: '' }]);
-//   };
-//   const deleteQuickCommand = (id) => {
-//     setQuickCommands(prev => prev.filter(c => c.id !== id));
-//   };
-
-//   if (!isWebSerialSupported) {
-//     return (
-//       <div className="flex h-screen items-center justify-center bg-zinc-950 text-white font-sans">
-//         <div className="text-center p-8 bg-zinc-900/50 rounded-2xl border border-white/10 shadow-2xl max-w-md backdrop-blur-xl">
-//           <AlertCircle className="w-16 h-16 text-rose-500 mx-auto mb-6 opacity-80" strokeWidth={1.5} />
-//           <h2 className="text-2xl font-bold mb-3 tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">Browser Not Supported</h2>
-//           <p className="text-zinc-500 leading-relaxed text-sm">Web Serial API is required. Please use Chrome or Edge.</p>
-//         </div>
-//       </div>
-//     );
-//   }
-
-//   const COMMON_BAUD_RATES = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 74880, 115200, 230400, 460800, 921600, 1000000, 2000000];
-
-//   return (
-//     <div className="flex h-screen bg-zinc-950 text-zinc-300 font-sans selection:bg-emerald-500/30 selection:text-emerald-200 overflow-hidden relative">
-      
-//       {/* Background - 略微增加网格透明度 */}
-//       <div className="absolute inset-0 bg-zinc-950 pointer-events-none z-0">
-//          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-emerald-900/10 via-zinc-950 to-zinc-950 opacity-50"></div>
-//          <div className="absolute inset-0" style={{ backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
-//       </div>
-      
-//       {/* Copy Feedback */}
-//       {copyFeedback && (
-//         <div className="absolute top-24 left-1/2 -translate-x-1/2 z-50 bg-zinc-800/90 backdrop-blur border border-emerald-500/20 text-emerald-400 px-4 py-2 rounded-full shadow-xl text-xs font-medium animate-in fade-in slide-in-from-top-2 duration-200 pointer-events-none flex items-center gap-2">
-//           <Copy size={14} />
-//           {copyFeedback}
-//         </div>
-//       )}
-
-//       {/* Connect Modal */}
-//       {isConnectModalOpen && (
-//         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200">
-//             <div className="relative w-[600px] group transition-all duration-300 transform scale-100">
-//                 <div className="absolute -inset-[1px] bg-gradient-to-r from-emerald-500/50 via-teal-500/50 to-emerald-500/50 rounded-2xl opacity-40 group-hover:opacity-60 transition duration-1000 blur-sm bg-[length:200%_auto] animate-gradient"></div>
-//                 <div className="relative w-full bg-[#09090b] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-//                   <div className="p-8 border-b border-white/5 flex items-center justify-between bg-zinc-900/80">
-//                       <div className="flex items-center gap-5">
-//                           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 flex items-center justify-center ring-1 ring-white/5 shadow-inner">
-//                             <Plug size={24} className="text-emerald-400" />
-//                           </div>
-//                           <div>
-//                             <h3 className="text-lg font-bold text-zinc-100 tracking-tight">Device Manager</h3>
-//                             <p className="text-sm text-zinc-500 mt-0.5 font-medium">Connect or manage serial devices</p>
-//                           </div>
-//                       </div>
-//                       <button onClick={() => setIsConnectModalOpen(false)} className="p-2.5 hover:bg-white/10 rounded-lg text-zinc-500 hover:text-white transition-colors"><X size={20} /></button>
-//                   </div>
-
-//                   {availablePorts.length > 0 && (
-//                      <div className="px-8 py-5 border-b border-white/5 bg-zinc-900/30">
-//                         <div className="relative group/search">
-//                            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within/search:text-emerald-400 transition-colors" />
-//                            <input type="text" placeholder="Filter devices..." value={portSearchQuery} onChange={(e) => setPortSearchQuery(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl pl-10 pr-4 py-3 text-sm text-zinc-300 focus:outline-none focus:border-emerald-500/30 focus:ring-1 focus:ring-emerald-500/10 placeholder-zinc-600 transition-all" />
-//                         </div>
-//                      </div>
-//                   )}
-
-//                   <div className="p-6 overflow-y-auto custom-scrollbar flex flex-col gap-3 min-h-[280px] bg-black/20">
-//                       {availablePorts.length === 0 ? (
-//                         <div className="flex-1 flex flex-col items-center justify-center text-zinc-600 py-12 border-2 border-dashed border-zinc-800/50 rounded-xl bg-zinc-900/20 mx-2">
-//                             <div className="w-16 h-16 rounded-full bg-zinc-900/80 flex items-center justify-center mb-5 shadow-lg ring-1 ring-white/5"><Usb size={32} className="opacity-30" /></div>
-//                             <p className="text-base font-medium text-zinc-400">No authorized devices</p>
-//                             <p className="text-xs opacity-50 mt-1 max-w-[240px] text-center leading-relaxed">Browser security requires manual authorization for new devices.</p>
-//                         </div>
-//                       ) : (
-//                         <>
-//                           <div className="flex items-center justify-between px-2 mb-1 mt-1"><div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Authorized Devices ({filteredPorts.length})</div></div>
-//                           {filteredPorts.map((p, index) => {
-//                             const info = getPortInfo(p, index);
-//                             const isCurrent = port === p && isConnected;
-//                             return (
-//                               <div key={index} onClick={() => openPort(p)} className={`w-full text-left p-4 rounded-xl border transition-all group/item relative overflow-hidden cursor-pointer flex items-center justify-between ${isCurrent ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-zinc-900/60 border-white/5 hover:border-emerald-500/20 hover:bg-zinc-800'}`}>
-//                                  <div className="flex items-center gap-5 relative z-10">
-//                                     <div className={`w-12 h-12 rounded-lg flex items-center justify-center border transition-colors ${isCurrent ? 'bg-emerald-500 text-black border-emerald-400' : 'bg-black/50 border-white/5 text-zinc-600 group-hover/item:text-emerald-400 group-hover/item:border-emerald-500/20'}`}><Usb size={20} /></div>
-//                                     <div>
-//                                       <div className={`text-base font-semibold transition-colors ${isCurrent ? 'text-emerald-400' : 'text-zinc-300 group-hover/item:text-white'}`}>{info.name}</div>
-//                                       <div className="text-xs font-mono text-zinc-600 group-hover/item:text-zinc-500 flex items-center gap-3 mt-1"><span>{info.meta}</span>{isCurrent && <span className="text-emerald-500 font-bold px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 leading-none">Active</span>}</div>
-//                                     </div>
-//                                  </div>
-//                                  <div className="flex items-center gap-3 relative z-10">
-//                                    <button onClick={(e) => forgetPort(e, p)} className="p-2.5 rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 opacity-0 group-hover/item:opacity-100 transition-all" title="Forget Device"><Trash2 size={16} /></button>
-//                                    {!isCurrent && <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-500 opacity-0 group-hover/item:opacity-100 group-hover/item:translate-x-0 translate-x-4 transition-all duration-300"><Zap size={16} /></div>}
-//                                  </div>
-//                               </div>
-//                             );
-//                           })}
-//                         </>
-//                       )}
-//                   </div>
-//                   <div className="p-6 border-t border-white/5 bg-zinc-900/50">
-//                      <button onClick={requestNewPort} className="relative w-full py-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold tracking-widest transition-all shadow-lg shadow-emerald-900/20 hover:shadow-emerald-500/30 flex items-center justify-center gap-3 group/btn overflow-hidden">
-//                         <div className="absolute inset-0 bg-white/20 translate-y-full group-hover/btn:translate-y-0 transition-transform duration-300"></div>
-//                         <Search size={18} strokeWidth={2.5} className="relative z-10" />
-//                         <span className="relative z-10">SCAN FOR NEW DEVICES</span>
-//                      </button>
-//                   </div>
-//                 </div>
-//             </div>
-//         </div>
-//       )}
-
-//       {/* Main Content */}
-//       <main className="flex-1 flex flex-col min-w-0 relative z-10">
-        
-//         {/* Top Floating Toolbar */}
-//         <div className="absolute top-6 left-8 right-8 z-20 flex items-center justify-between pointer-events-none">
-//             <div className={`pointer-events-auto flex items-center gap-4 px-3 py-2 pr-5 rounded-full border backdrop-blur-md transition-all duration-500 ${isConnected ? 'bg-emerald-950/40 border-emerald-500/30 shadow-[0_0_20px_-5px_rgba(16,185,129,0.3)]' : 'bg-zinc-900/60 border-white/10'}`}>
-//               <div className={`w-9 h-9 rounded-full flex items-center justify-center ${isConnected ? 'bg-emerald-500 text-black' : 'bg-zinc-800 text-zinc-500'}`}>{isConnected ? <Activity size={16} className="animate-pulse" /> : <Zap size={16} />}</div>
-//               <div className="flex flex-col">
-//                   <span className={`text-xs font-bold tracking-wider uppercase ${isConnected ? 'text-emerald-400' : 'text-zinc-500'}`}>{isConnected ? 'Connected' : 'Offline'}</span>
-//                   {isConnected && <span className="text-[10px] text-zinc-500 leading-none">{String(baudRate)} bps</span>}
-//               </div>
-//             </div>
-
-//             <div className="pointer-events-auto flex items-center gap-4">
-//                 <div className="relative group/search">
-//                     <div className={`absolute inset-y-0 left-3 flex items-center pointer-events-none transition-colors ${logFilter ? 'text-emerald-400' : 'text-zinc-500'}`}><Filter size={16} /></div>
-//                     <input type="text" value={logFilter} onChange={(e) => setLogFilter(e.target.value)} placeholder="Filter logs..." className={`h-12 pl-10 pr-4 rounded-full border text-sm bg-zinc-900/60 backdrop-blur-md transition-all outline-none w-40 focus:w-64 ${logFilter ? 'border-emerald-500/50 text-emerald-300' : 'border-white/10 text-zinc-300 focus:border-white/20'}`} />
-//                     {logFilter && <button onClick={() => setLogFilter('')} className="absolute inset-y-0 right-3 flex items-center text-zinc-500 hover:text-white"><X size={14} /></button>}
-//                 </div>
-
-//                 <div className="flex items-center p-2 rounded-full bg-zinc-900/60 border border-white/10 backdrop-blur-md shadow-xl gap-2">
-//                     <div className="flex bg-black/20 rounded-full p-1 border border-white/5">
-//                        <button onClick={() => setViewMode('ascii')} className={`px-4 py-1.5 rounded-full text-[11px] font-bold transition-all ${viewMode === 'ascii' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>ASCII</button>
-//                        <button onClick={() => setViewMode('hex')} className={`px-4 py-1.5 rounded-full text-[11px] font-bold transition-all ${viewMode === 'hex' ? 'bg-emerald-600/20 text-emerald-400 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>HEX</button>
-//                     </div>
-//                     <div className="w-px h-5 bg-white/10 mx-1"></div>
-//                     {isConnected && (
-//                       <button onClick={() => setIsPaused(!isPaused)} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${isPaused ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'text-zinc-400 hover:bg-white/10 hover:text-white'}`} title={isPaused ? "Resume View" : "Pause View"}>{isPaused ? <Play size={16} fill="currentColor" /> : <Pause size={16} fill="currentColor" />}</button>
-//                     )}
-//                     <button onClick={exportData} disabled={logs.length === 0} className="w-9 h-9 rounded-full flex items-center justify-center text-zinc-400 hover:bg-white/10 hover:text-emerald-400 transition-all disabled:opacity-30" title="Export Log"><Download size={16} strokeWidth={2} /></button>
-//                     <button onClick={() => setLogs([])} className="w-9 h-9 rounded-full flex items-center justify-center text-zinc-400 hover:bg-rose-500/20 hover:text-rose-400 transition-all" title="Clear Console"><Trash2 size={16} strokeWidth={2} /></button>
-//                 </div>
-//             </div>
-//         </div>
-
-//         {/* Terminal Area */}
-//         <div className="flex-1 pt-28 pb-10 px-10 overflow-y-auto custom-scrollbar font-mono text-sm leading-relaxed relative">
-//            {isPaused && <div className="fixed top-28 right-[420px] px-4 py-1.5 bg-amber-500/90 text-black text-xs font-bold rounded-lg shadow-lg z-30 pointer-events-none uppercase tracking-wider backdrop-blur-md">View Paused</div>}
-//            {logs.length === 0 ? (
-//              <div className="h-full flex flex-col items-center justify-center opacity-30 select-none">
-//                 <div className="w-32 h-32 rounded-full bg-gradient-to-tr from-emerald-500/20 to-transparent flex items-center justify-center mb-8 ring-1 ring-white/10"><Terminal size={56} className="text-emerald-400" strokeWidth={1} /></div>
-//                 <p className="text-zinc-500 font-light tracking-wide text-base">READY TO CONNECT</p>
-//              </div>
-//            ) : (
-//              <div className="space-y-1">
-//                 {filteredLogs.map((log) => (
-//                     <div key={log.id} onClick={() => copyToClipboard(log.text)} className="flex gap-6 hover:bg-white/[0.04] -mx-6 px-6 py-0.5 rounded transition-colors group cursor-pointer relative" title="Click to copy line">
-//                         {showTimestamp && <span className="text-zinc-700 shrink-0 select-none text-xs pt-[4px] font-medium tracking-tighter group-hover:text-zinc-500 transition-colors font-sans">{log.timestamp}</span>}
-//                         <div className={`tracking-tight whitespace-pre-wrap break-all flex-1 ${log.type === 'tx' ? 'text-indigo-300/80' : 'text-emerald-400 font-medium'}`}>{log.type === 'tx' && <span className="text-indigo-500 mr-3 text-xs align-middle inline-block font-bold select-none">TX</span>}{renderLogContent(log.text)}</div>
-//                     </div>
-//                 ))}
-//                 {filteredLogs.length === 0 && logFilter && <div className="text-zinc-500 text-sm text-center py-12">No matching logs found for "{logFilter}"</div>}
-//                 <div ref={logsEndRef} />
-//              </div>
-//            )}
-//         </div>
-
-//         {/* Footer Status */}
-//         <div className="h-10 flex items-center justify-between px-8 text-xs text-zinc-600 select-none border-t border-white/[0.03]">
-//             <div className="flex items-center gap-6 font-medium">
-//                <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> RX: {logs.filter(l => l.type === 'rx').length}</span>
-//                <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> TX: {logs.filter(l => l.type === 'tx').length}</span>
-//             </div>
-//             <label className="flex items-center gap-2 cursor-pointer hover:text-zinc-400 transition-colors group">
-//                 <div className={`w-2 h-2 rounded-full transition-colors ${autoScroll && !isPaused ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-zinc-700'}`}></div>
-//                 <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} className="hidden" />
-//                 AUTO-SCROLL
-//             </label>
-//         </div>
-//       </main>
-
-//       {/* Sidebar (Right) - 384px (w-96) */}
-//       <aside className="w-96 bg-zinc-900/60 backdrop-blur-2xl border-l border-white/[0.06] flex flex-col z-20 relative shadow-2xl">
-//         <div className="h-20 flex-none flex items-center px-8 border-b border-white/[0.06]">
-//           <div className="flex items-center gap-4 opacity-90 hover:opacity-100 transition-opacity">
-//             <Command size={24} className="text-emerald-400" />
-//             <span className="text-xl font-bold text-zinc-100 tracking-wide">Serial<span className="font-light text-zinc-500">Flux</span> <span className="text-[10px] bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded ml-1.5 border border-emerald-500/20 align-top">PRO</span></span>
-//           </div>
-//         </div>
-
-//         <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-          
-//           {/* Connection Card */}
-//           <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-6 shadow-sm">
-//             <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2"><Plug size={14} /> Connection</h3>
-//             <div className="space-y-4">
-//                <div className="relative w-full" ref={baudRef}>
-//                   <div className="relative flex items-center group">
-//                       <input type="text" inputMode="numeric" pattern="[0-9]*" value={baudRate} onChange={(e) => { if (/^\d*$/.test(e.target.value)) setBaudRate(e.target.value); }} disabled={isConnected} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-300 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-all disabled:opacity-50 hover:border-white/20 font-mono pr-10" placeholder="Custom Baud..." />
-//                       <button onClick={() => !isConnected && setIsBaudDropdownOpen(!isBaudDropdownOpen)} disabled={isConnected} className="absolute right-3 p-1 rounded hover:bg-white/5 text-zinc-500 hover:text-emerald-400 disabled:opacity-50 transition-colors"><ChevronDown size={16} className={`transition-transform ${isBaudDropdownOpen ? 'rotate-180' : ''}`} /></button>
-//                   </div>
-//                   {isBaudDropdownOpen && (
-//                       <div className="absolute top-full left-0 right-0 mt-2 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 max-h-56 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-100">
-//                           {COMMON_BAUD_RATES.map(rate => (
-//                               <button key={rate} onClick={() => { setBaudRate(rate); setIsBaudDropdownOpen(false); }} className={`w-full text-left px-5 py-2.5 text-xs font-mono hover:bg-emerald-500/10 hover:text-emerald-400 transition-colors flex items-center justify-between border-b border-white/[0.02] last:border-none ${parseInt(baudRate) === rate ? 'text-emerald-400 bg-emerald-500/5' : 'text-zinc-400'}`}><span>{rate}</span>{parseInt(baudRate) === rate && <Check size={14} />}</button>
-//                           ))}
-//                       </div>
-//                   )}
-//                </div>
-//                <button onClick={isConnected ? disconnectPort : () => setIsConnectModalOpen(true)} className={`w-full py-4 rounded-xl font-bold text-sm tracking-wide transition-all duration-300 flex items-center justify-center gap-2 shadow-lg ${isConnected ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 hover:shadow-rose-500/10' : 'bg-emerald-600 text-white hover:bg-emerald-500 border border-transparent hover:shadow-emerald-500/30'}`}>{isConnected ? 'DISCONNECT' : 'CONNECT DEVICE'}</button>
-//             </div>
-//           </div>
-
-//           {/* Quick Actions Card */}
-//           <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-6 shadow-sm">
-//              <div className="flex items-center justify-between mb-4">
-//                 <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><Zap size={14} /> Quick Actions</h3>
-//                 <button onClick={() => setIsEditingCmds(!isEditingCmds)} className={`p-1.5 rounded-lg transition-colors ${isEditingCmds ? 'bg-emerald-500 text-black' : 'hover:bg-white/10 text-zinc-600 hover:text-zinc-300'}`}>{isEditingCmds ? <Save size={14} /> : <Edit2 size={14} />}</button>
-//              </div>
-//              {isEditingCmds ? (
-//                <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200">
-//                   {quickCommands.map((cmd) => (
-//                     <div key={cmd.id} className="flex gap-2">
-//                       <input type="text" value={cmd.label} onChange={(e) => updateQuickCommand(cmd.id, 'label', e.target.value)} className="w-1/3 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-300 focus:border-emerald-500/50 focus:outline-none" />
-//                       <input type="text" value={cmd.cmd} onChange={(e) => updateQuickCommand(cmd.id, 'cmd', e.target.value)} className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-emerald-400/80 focus:border-emerald-500/50 focus:outline-none" />
-//                       <button onClick={() => deleteQuickCommand(cmd.id)} className="p-2 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20"><Trash2 size={14} /></button>
-//                     </div>
-//                   ))}
-//                   <button onClick={addQuickCommand} className="w-full py-2.5 border border-dashed border-white/10 rounded-lg text-xs text-zinc-500 hover:text-emerald-400 transition-colors"><Plus size={14} className="inline mr-1"/> Add</button>
-//                </div>
-//              ) : (
-//                <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar -mx-1 px-1">
-//                   {quickCommands.map((cmd) => (
-//                     <button key={cmd.id} onClick={() => sendData(cmd.cmd)} disabled={!isConnected} className="flex-none whitespace-nowrap px-4 py-2.5 rounded-lg bg-black/40 border border-white/5 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-400 transition-all text-xs font-medium text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed">{cmd.label}</button>
-//                   ))}
-//                </div>
-//              )}
-//           </div>
-
-//           {/* Highlight Card */}
-//           <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-6 shadow-sm">
-//             <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2"><Highlighter size={14} /> Highlight</h3>
-//             <div className="flex flex-col gap-3">
-//                 <input 
-//                     type="text" 
-//                     value={highlightKeyword} 
-//                     onChange={(e) => setHighlightKeyword(e.target.value)} 
-//                     placeholder="Enter keyword to highlight..." 
-//                     className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-300 focus:outline-none focus:border-emerald-500/50 transition-all" 
-//                 />
-//                 <div className="flex gap-2">
-//                     {[
-//                       {color: 'text-amber-400 bg-amber-400/10 border-amber-400/20', bg: 'bg-amber-400'},
-//                       {color: 'text-rose-400 bg-rose-400/10 border-rose-400/20', bg: 'bg-rose-500'},
-//                       {color: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20', bg: 'bg-emerald-500'},
-//                       {color: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20', bg: 'bg-cyan-500'},
-//                       {color: 'text-violet-400 bg-violet-400/10 border-violet-400/20', bg: 'bg-violet-500'},
-//                     ].map((item, idx) => (
-//                         <button 
-//                             key={idx} 
-//                             onClick={() => setHighlightColor(item.color)} 
-//                             className={`flex-1 h-8 rounded-lg ${item.bg} ${highlightColor === item.color ? 'ring-2 ring-white/20 scale-105 shadow-lg opacity-100' : 'opacity-20 hover:opacity-80'} transition-all`} 
-//                         />
-//                     ))}
-//                 </div>
-//             </div>
-//           </div>
-//         </div>
-
-//         {/* Transmitter - Fixed Bottom */}
-//         <div className="flex-none p-6 border-t border-white/5 bg-zinc-900/80 backdrop-blur-xl z-30">
-//             <div className="flex flex-col gap-4">
-//               <div className="relative group">
-//                   <textarea 
-//                       value={inputText}
-//                       onChange={(e) => setInputText(e.target.value)}
-//                       onKeyDown={handleInputKeyDown}
-//                       placeholder="Input payload..."
-//                       className="w-full h-32 bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-mono text-zinc-300 focus:outline-none focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/10 resize-none placeholder-zinc-600 transition-all custom-scrollbar"
-//                   />
-//                   <div className="absolute bottom-3 right-3 flex gap-2">
-//                      <button onClick={() => setUseHexSend(!useHexSend)} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-all text-[10px] font-mono tracking-wide ${useHexSend ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-white/5 border-white/5 text-zinc-500 hover:text-zinc-300'}`}>
-//                         {useHexSend ? 'HEX' : 'ASCII'}
-//                      </button>
-//                      <div className="flex bg-white/5 border border-white/5 rounded-md overflow-hidden">
-//                         {[
-//                             { label: '\\n', val: '\\n' },
-//                             { label: '\\r\\n', val: '\\r\\n' },
-//                             { label: 'Ø', val: 'none' },
-//                         ].map(opt => (
-//                             <button key={opt.val} onClick={() => setLineEnding(opt.val)} className={`px-2 py-1 text-[10px] font-mono transition-all ${lineEnding === opt.val ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'}`}>{opt.label}</button>
-//                         ))}
-//                      </div>
-//                   </div>
-//               </div>
-//               <button onClick={() => sendData()} disabled={!isConnected} className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-600 text-white text-sm font-bold tracking-wide rounded-xl transition-all shadow-lg shadow-emerald-900/20 disabled:shadow-none flex items-center justify-center gap-2.5 group hover:scale-[1.01] active:scale-[0.99]">
-//                   <Send size={16} className="group-hover:translate-x-0.5 transition-transform" />
-//                   SEND PAYLOAD
-//               </button>
-//             </div>
-//         </div>
-//       </aside>
-
-//       <style>{`
-//         .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
-//         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-//         .custom-scrollbar::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 5px; }
-//         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #52525b; }
-//         .custom-scrollbar::-webkit-scrollbar-corner { background: transparent; }
-//         @keyframes gradient { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
-//         .animate-gradient { animation: gradient 3s ease infinite; }
-//       `}</style>
-//     </div>
-//   );
-// }
-
-
-// import React, { useState, useRef, useEffect } from 'react';
-// import { 
-//   Terminal, 
-//   Settings, 
-//   Download, 
-//   Trash2, 
-//   Play, 
-//   Square, 
-//   Highlighter, 
-//   Send,
-//   AlertCircle,
-//   Zap,
-//   Activity,
-//   Cpu,
-//   Command,
-//   Radio,
-//   Binary,
-//   Copy,
-//   Plus,
-//   X,
-//   Pause,
-//   Edit2,
-//   Save,
-//   RefreshCw,
-//   MoreHorizontal,
-//   Plug,
-//   Search,
-//   Usb,
-//   Monitor,
-//   Unplug,
-//   Hash,
-//   Filter,
-//   ChevronDown,
-//   Check,
-//   ArrowUp,
-//   ArrowDown,
-//   Minimize2,
-//   Maximize2
-// } from 'lucide-react';
-
-// export default function App() {
-//   // --- 状态定义 ---
-
-//   // 串口相关
-//   const [port, setPort] = useState(null);
-//   const [availablePorts, setAvailablePorts] = useState([]); 
-//   const [isConnected, setIsConnected] = useState(false);
-  
-//   // 核心引用
-//   const readerRef = useRef(null);
-//   const writerRef = useRef(null);
-//   const readableStreamClosedRef = useRef(null);
-//   const writableStreamClosedRef = useRef(null);
-//   const baudRef = useRef(null);
-//   const bufferRef = useRef('');
-  
-//   // 界面交互状态
-//   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
-//   const [isBaudDropdownOpen, setIsBaudDropdownOpen] = useState(false);
-//   const [portSearchQuery, setPortSearchQuery] = useState('');
-//   const [isPaused, setIsPaused] = useState(false);
-//   const isPausedRef = useRef(false);
-
-//   // 日志相关
-//   const [logs, setLogs] = useState([]);
-//   const [autoScroll, setAutoScroll] = useState(true);
-//   const logsEndRef = useRef(null);
-//   const [viewMode, setViewMode] = useState('ascii'); // 'ascii' | 'hex'
-//   const [logFilter, setLogFilter] = useState('');
-
-//   // --- 持久化状态 (localStorage) - 增强版 ---
-//   const usePersistedState = (key, defaultValue) => {
-//     const [state, setState] = useState(() => {
-//       try {
-//         const storedValue = localStorage.getItem(key);
-//         return storedValue ? JSON.parse(storedValue) : defaultValue;
-//       } catch (error) {
-//         console.error(`Error parsing localStorage key "${key}":`, error);
-//         return defaultValue;
-//       }
-//     });
-
-//     useEffect(() => {
-//       try {
-//         localStorage.setItem(key, JSON.stringify(state));
-//       } catch (error) {
-//         console.error(`Error setting localStorage key "${key}":`, error);
-//       }
-//     }, [key, state]);
-
-//     return [state, setState];
-//   };
-
-//   // 使用持久化状态
-//   const [baudRate, setBaudRate] = usePersistedState('serial_baudrate', 115200);
-//   const [highlightKeyword, setHighlightKeyword] = usePersistedState('serial_highlight_kw', '');
-//   const [highlightColor, setHighlightColor] = usePersistedState('serial_highlight_color', 'text-amber-400 bg-amber-400/10 border-amber-400/20');
-//   const [quickCommands, setQuickCommands] = usePersistedState('serial_quick_cmds', [
-//     { id: 1, label: 'AT Test', cmd: 'AT' },
-//     { id: 2, label: 'Reset', cmd: 'AT+RST' },
-//     { id: 3, label: 'Version', cmd: 'AT+GMR' },
-//     { id: 4, label: 'Scan', cmd: 'AT+CWLAP' },
-//     { id: 5, label: 'IP Addr', cmd: 'AT+CIFSR' },
-//   ]);
-//   const [useHexSend, setUseHexSend] = usePersistedState('serial_use_hex_send', false);
-//   const [lineEnding, setLineEnding] = usePersistedState('serial_line_ending', '\\n'); // none, \n, \r, \r\n
-
-//   // 发送相关
-//   const [inputText, setInputText] = useState('');
-//   const [showTimestamp, setShowTimestamp] = useState(true);
-//   const [isEditingCmds, setIsEditingCmds] = useState(false);
-//   const [copyFeedback, setCopyFeedback] = useState(null);
-
-//   // 历史记录相关
-//   const [sendHistory, setSendHistory] = useState([]);
-//   const [historyIndex, setHistoryIndex] = useState(-1); // -1 表示当前输入
-
-//   // 浏览器兼容性
-//   const isWebSerialSupported = 'serial' in navigator;
-
-//   // --- Effect Hooks ---
-
-//   useEffect(() => {
-//     document.title = "SerialFlux - Pro Web Debugger";
-//   }, []);
-
-//   useEffect(() => {
-//     isPausedRef.current = isPaused;
-//   }, [isPaused]);
-
-//   // 点击外部关闭波特率下拉
-//   useEffect(() => {
-//     const handleClickOutside = (event) => {
-//       if (baudRef.current && !baudRef.current.contains(event.target)) {
-//         setIsBaudDropdownOpen(false);
-//       }
-//     };
-//     document.addEventListener('mousedown', handleClickOutside);
-//     return () => document.removeEventListener('mousedown', handleClickOutside);
-//   }, []);
-
-//   // 端口监听
-//   useEffect(() => {
-//     if (!isWebSerialSupported) return;
-//     const updatePorts = async () => {
-//       try {
-//         const ports = await navigator.serial.getPorts();
-//         setAvailablePorts(ports);
-//       } catch (e) { console.error(e); }
-//     };
-//     updatePorts();
-//     const handleConnectEvent = () => updatePorts();
-//     const handleDisconnectEvent = (e) => {
-//       updatePorts();
-//       if (port === e.target) disconnectPort();
-//     };
-//     navigator.serial.addEventListener('connect', handleConnectEvent);
-//     navigator.serial.addEventListener('disconnect', handleDisconnectEvent);
-//     return () => {
-//       navigator.serial.removeEventListener('connect', handleConnectEvent);
-//       navigator.serial.removeEventListener('disconnect', handleDisconnectEvent);
-//     };
-//   }, [port]);
-
-//   // 自动滚动
-//   useEffect(() => {
-//     if (autoScroll && !isPaused && logsEndRef.current && !logFilter) {
-//       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-//     }
-//   }, [logs, autoScroll, viewMode, isPaused, logFilter]);
-
-//   // --- 核心逻辑 ---
-
-//   const openPort = async (selectedPort) => {
-//     try {
-//       if (!selectedPort) return;
-//       if (port && isConnected) await disconnectPort();
-
-//       // 确保 baudRate 是数字，防止从 localStorage 读到奇怪的东西导致连接失败
-//       const baud = parseInt(baudRate) || 115200;
-//       await selectedPort.open({ baudRate: baud });
-      
-//       setPort(selectedPort);
-//       setIsConnected(true);
-//       setIsPaused(false);
-//       setIsConnectModalOpen(false);
-//       bufferRef.current = '';
-
-//       const ports = await navigator.serial.getPorts();
-//       setAvailablePorts(ports);
-      
-//       const textDecoder = new TextDecoderStream();
-//       const readableStreamClosed = selectedPort.readable.pipeTo(textDecoder.writable);
-//       readableStreamClosedRef.current = readableStreamClosed;
-//       const reader = textDecoder.readable.getReader();
-//       readerRef.current = reader;
-
-//       const textEncoder = new TextEncoderStream();
-//       const writableStreamClosed = textEncoder.readable.pipeTo(selectedPort.writable);
-//       writableStreamClosedRef.current = writableStreamClosed;
-//       const writer = textEncoder.writable.getWriter();
-//       writerRef.current = writer;
-
-//       readLoop();
-//     } catch (error) {
-//       console.error('Connection failed:', error);
-//       alert('Connection failed: ' + error.message);
-//     }
-//   };
-
-//   const readLoop = async () => {
-//     try {
-//       while (true) {
-//         const { value, done } = await readerRef.current.read();
-//         if (done) {
-//           readerRef.current.releaseLock();
-//           break;
-//         }
-//         if (value) processIncomingData(value);
-//       }
-//     } catch (error) { console.error('Read error:', error); }
-//   };
-
-//   const processIncomingData = (chunk) => {
-//     bufferRef.current += chunk;
-//     if (bufferRef.current.includes('\n')) {
-//       const lines = bufferRef.current.split(/\r?\n/);
-//       const completeLines = lines.slice(0, -1);
-//       bufferRef.current = lines[lines.length - 1];
-//       if (!isPausedRef.current && completeLines.length > 0) {
-//         addLogs(completeLines, 'rx');
-//       }
-//     }
-//   };
-
-//   const disconnectPort = async () => {
-//     try {
-//       if (readerRef.current) {
-//         await readerRef.current.cancel();
-//         await readableStreamClosedRef.current.catch(() => {});
-//         readerRef.current = null;
-//       }
-//       if (writerRef.current) {
-//         await writerRef.current.close();
-//         await writableStreamClosedRef.current;
-//         writerRef.current = null;
-//       }
-//       if (port) {
-//         await port.close();
-//         setPort(null);
-//         setIsConnected(false);
-//       }
-//     } catch (error) { console.error('Disconnect error:', error); }
-//   };
-
-//   const addLogs = (newLines, type) => {
-//     setLogs(prev => {
-//       const newEntries = newLines.map(text => ({
-//         id: Date.now() + Math.random(),
-//         timestamp: new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 }),
-//         text: text,
-//         type: type 
-//       }));
-//       const updated = [...prev, ...newEntries];
-//       if (updated.length > 2000) return updated.slice(-2000);
-//       return updated;
-//     });
-//   };
-
-//   // --- 导出数据功能 ---
-//   const exportData = () => {
-//     const content = logs.map(l => `[${l.timestamp}] ${l.type === 'tx' ? 'TX' : 'RX'}: ${l.text}`).join('\n');
-//     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-//     const url = URL.createObjectURL(blob);
-//     const link = document.createElement('a');
-//     link.href = url;
-//     link.download = `serial_log_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.txt`;
-//     document.body.appendChild(link);
-//     link.click();
-//     document.body.removeChild(link);
-//   };
-
-//   // --- 发送逻辑 ---
-
-//   const sendData = async (textToSend = null) => {
-//     const rawData = textToSend !== null ? textToSend : inputText;
-//     if (!port || !writerRef.current || !rawData) return;
-
-//     if (textToSend === null && rawData.trim() !== '') {
-//         setSendHistory(prev => {
-//             const newHistory = [rawData, ...prev].slice(0, 50); 
-//             return newHistory;
-//         });
-//         setHistoryIndex(-1); 
-//     }
-
-//     try {
-//       if (useHexSend) {
-//           alert("提示：当前 Web 架构主要针对文本调试。HEX 模式发送暂未完全实装 (需重写底层流管道)。");
-//       } else {
-//           // ASCII 模式发送
-//           let finalData = rawData;
-//           if (lineEnding === '\\n') finalData += '\n';
-//           else if (lineEnding === '\\r') finalData += '\r';
-//           else if (lineEnding === '\\r\\n') finalData += '\r\n';
-          
-//           await writerRef.current.write(finalData);
-//           addLogs([finalData.replace(/\r/g, '').replace(/\n/g, '')], 'tx'); 
-//       }
-      
-//       if (textToSend === null) setInputText(''); 
-//     } catch (error) {
-//       console.error('Send failed:', error);
-//     }
-//   };
-
-//   const handleInputKeyDown = (e) => {
-//     if (e.key === 'Enter') {
-//         if (e.ctrlKey) {
-//             sendData();
-//         }
-//     } else if (e.key === 'ArrowUp') {
-//         e.preventDefault();
-//         if (sendHistory.length > 0) {
-//             const nextIndex = Math.min(historyIndex + 1, sendHistory.length - 1);
-//             setHistoryIndex(nextIndex);
-//             setInputText(sendHistory[nextIndex]);
-//         }
-//     } else if (e.key === 'ArrowDown') {
-//         e.preventDefault();
-//         if (historyIndex > 0) {
-//             const nextIndex = historyIndex - 1;
-//             setHistoryIndex(nextIndex);
-//             setInputText(sendHistory[nextIndex]);
-//         } else if (historyIndex === 0) {
-//             setHistoryIndex(-1);
-//             setInputText(''); 
-//         }
-//     }
-//   };
-
-//   // --- 辅助函数 ---
-
-//   const forgetPort = async (e, portToForget) => {
-//     e.stopPropagation();
-//     try {
-//         if (portToForget === port && isConnected) await disconnectPort();
-//         await portToForget.forget();
-//         const ports = await navigator.serial.getPorts();
-//         setAvailablePorts(ports);
-//     } catch (error) {
-//         alert('Could not forget port. Require Chrome 103+.');
-//     }
-//   };
-
-//   const requestNewPort = async () => {
-//     try {
-//       const selectedPort = await navigator.serial.requestPort();
-//       openPort(selectedPort);
-//     } catch (error) { console.log('User cancelled'); }
-//   };
-
-//   const toHexDisplay = (str) => {
-//     let result = '';
-//     for (let i = 0; i < str.length; i++) {
-//       const hex = str.charCodeAt(i).toString(16).toUpperCase().padStart(2, '0');
-//       result += hex + ' ';
-//     }
-//     return result.trim();
-//   };
-
-//   const copyToClipboard = (text) => {
-//     navigator.clipboard.writeText(text);
-//     setCopyFeedback(text.substring(0, 20) + '...');
-//     setTimeout(() => setCopyFeedback(null), 1500);
-//   };
-
-//   const renderLogContent = (text) => {
-//     // 强制转换为字符串，防止对象渲染错误
-//     const safeText = String(text);
-    
-//     const contentToRender = viewMode === 'hex' ? toHexDisplay(safeText) : safeText;
-//     if (!highlightKeyword || viewMode === 'hex') return contentToRender;
-//     const parts = contentToRender.split(new RegExp(`(${highlightKeyword})`, 'gi'));
-//     return (
-//       <span>
-//         {parts.map((part, i) => 
-//           part.toLowerCase() === highlightKeyword.toLowerCase() ? (
-//             <span key={i} className={`${highlightColor} font-bold px-1.5 py-0.5 rounded border text-[11px] tracking-wide mx-0.5 shadow-[0_0_10px_rgba(0,0,0,0.2)]`}>
-//               {part}
-//             </span>
-//           ) : (part)
-//         )}
-//       </span>
-//     );
-//   };
-
-//   // 格式化相关
-//   const getPortInfo = (port, index) => {
-//     const info = port.getInfo();
-//     if (info.usbVendorId && info.usbProductId) {
-//       const vid = info.usbVendorId.toString(16).toUpperCase().padStart(4, '0');
-//       const pid = info.usbProductId.toString(16).toUpperCase().padStart(4, '0');
-//       return { name: `USB Serial Device`, meta: `VID:${vid} PID:${pid}`, id: `${vid}:${pid}` };
-//     }
-//     return { name: `Serial Port ${index + 1}`, meta: 'Generic Device', id: `generic-${index}` };
-//   };
-
-//   const filteredPorts = availablePorts.filter((p, index) => {
-//     if (!portSearchQuery) return true;
-//     const info = getPortInfo(p, index);
-//     const searchLower = portSearchQuery.toLowerCase();
-//     return info.name.toLowerCase().includes(searchLower) || info.meta.toLowerCase().includes(searchLower);
-//   });
-
-//   const filteredLogs = logs.filter(log => {
-//     if (!logFilter) return true;
-//     // 强制转换防止崩溃
-//     return String(log.text).toLowerCase().includes(logFilter.toLowerCase());
-//   });
-
-//   const updateQuickCommand = (id, field, value) => {
-//     setQuickCommands(prev => prev.map(cmd => cmd.id === id ? { ...cmd, [field]: value } : cmd));
-//   };
-//   const addQuickCommand = () => {
-//     const newId = Math.max(0, ...quickCommands.map(c => c.id)) + 1;
-//     setQuickCommands([...quickCommands, { id: newId, label: 'Cmd', cmd: '' }]);
-//   };
-//   const deleteQuickCommand = (id) => {
-//     setQuickCommands(prev => prev.filter(c => c.id !== id));
-//   };
-
-//   if (!isWebSerialSupported) {
-//     return (
-//       <div className="flex h-screen items-center justify-center bg-zinc-950 text-white font-sans">
-//         <div className="text-center p-8 bg-zinc-900/50 rounded-2xl border border-white/10 shadow-2xl max-w-md backdrop-blur-xl">
-//           <AlertCircle className="w-16 h-16 text-rose-500 mx-auto mb-6 opacity-80" strokeWidth={1.5} />
-//           <h2 className="text-2xl font-bold mb-3 tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">Browser Not Supported</h2>
-//           <p className="text-zinc-500 leading-relaxed text-sm">Web Serial API is required. Please use Chrome or Edge.</p>
-//         </div>
-//       </div>
-//     );
-//   }
-
-//   const COMMON_BAUD_RATES = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 74880, 115200, 230400, 460800, 921600, 1000000, 2000000];
-
-//   return (
-//     // 桌面环境容器 (模拟桌面)
-//     <div className="flex h-screen w-full items-center justify-center bg-[#050505] text-zinc-300 font-sans selection:bg-emerald-500/30 selection:text-emerald-200 overflow-hidden relative">
-      
-//       {/* 桌面背景 - 极光网格 */}
-//       <div className="absolute inset-0 pointer-events-none z-0">
-//          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-emerald-900/20 via-zinc-950/80 to-zinc-950"></div>
-//          <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}></div>
-//          <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-//       </div>
-
-//       {/* 应用窗口 (Window Container) - 模拟实物面板 */}
-//       <div className="relative w-[95vw] h-[90vh] max-w-[1280px] max-h-[850px] flex flex-col animate-in fade-in zoom-in-95 duration-500 shadow-[0_0_60px_-15px_rgba(0,0,0,0.8)]">
-        
-//         {/* 外壳边框 (Bezel) */}
-//         <div className="absolute inset-0 rounded-2xl border border-white/5 bg-zinc-900/95 backdrop-blur-3xl z-0 box-border pointer-events-none ring-1 ring-white/5">
-//             {/* 顶部高光 */}
-//             <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-//         </div>
-
-//         {/* 装饰性：螺丝孔位 */}
-//         <div className="absolute top-3 left-3 w-2 h-2 rounded-full bg-black/60 border border-white/5 z-20 pointer-events-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)] opacity-40"></div>
-//         <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-black/60 border border-white/5 z-20 pointer-events-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)] opacity-40"></div>
-//         <div className="absolute bottom-3 left-3 w-2 h-2 rounded-full bg-black/60 border border-white/5 z-20 pointer-events-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)] opacity-40"></div>
-//         <div className="absolute bottom-3 right-3 w-2 h-2 rounded-full bg-black/60 border border-white/5 z-20 pointer-events-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)] opacity-40"></div>
-
-//         {/* 内容区域容器 */}
-//         <div className="relative z-10 flex flex-col w-full h-full rounded-2xl overflow-hidden bg-transparent">
-            
-//             {/* Window Title Bar (Mac Style + Industrial Text) */}
-//             <div className="h-10 bg-black/20 border-b border-white/5 flex items-center justify-between px-6 select-none flex-none z-50 backdrop-blur-sm">
-//                 <div className="flex gap-2 group">
-//                     <div className="w-3 h-3 rounded-full bg-[#FF5F56] border border-black/20 shadow-inner"></div>
-//                     <div className="w-3 h-3 rounded-full bg-[#FFBD2E] border border-black/20 shadow-inner"></div>
-//                     <div className="w-3 h-3 rounded-full bg-[#27C93F] border border-black/20 shadow-inner"></div>
-//                 </div>
-//                 <div className="text-xs font-bold text-zinc-500 tracking-widest uppercase flex items-center gap-2 opacity-80">
-//                     <Command size={12} className="text-emerald-500" />
-//                     SERIAL FLUX PRO <span className="text-[9px] px-1 bg-white/5 rounded text-zinc-600 font-mono">V1.0</span>
-//                 </div>
-//                 <div className="w-14"></div> 
-//             </div>
-
-//             {/* Inner Content Area */}
-//             <div className="flex-1 flex overflow-hidden relative">
-                
-//                 {/* Copy Feedback Toast (Inside Window) */}
-//                 {copyFeedback && (
-//                     <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-900 border border-emerald-500/20 text-emerald-400 px-4 py-2 rounded-full shadow-2xl text-xs font-medium animate-in fade-in slide-in-from-top-2 duration-200 pointer-events-none flex items-center gap-2">
-//                     <Copy size={14} />
-//                     {copyFeedback}
-//                     </div>
-//                 )}
-
-//                 {/* ... Connect Modal Component (Scoped) ... */}
-//                 {isConnectModalOpen && (
-//                     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-[2px] animate-in fade-in duration-200">
-//                         <div className="relative w-[500px] bg-[#0c0c0e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80%] ring-1 ring-white/10">
-//                             {/* Modal Header */}
-//                             <div className="p-6 border-b border-white/5 flex items-center justify-between bg-zinc-900/50">
-//                                 <div className="flex items-center gap-4">
-//                                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 flex items-center justify-center ring-1 ring-white/5 shadow-inner">
-//                                         <Plug size={20} className="text-emerald-400" />
-//                                     </div>
-//                                     <div>
-//                                         <h3 className="text-base font-bold text-zinc-100 tracking-tight">Device Manager</h3>
-//                                         <p className="text-xs text-zinc-500 mt-0.5 font-medium">Select a serial port to connect</p>
-//                                     </div>
-//                                 </div>
-//                                 <button onClick={() => setIsConnectModalOpen(false)} className="p-2 hover:bg-white/10 rounded-lg text-zinc-500 hover:text-white transition-colors"><X size={18} /></button>
-//                             </div>
-
-//                             {/* Search */}
-//                             {availablePorts.length > 0 && (
-//                                 <div className="px-6 py-4 border-b border-white/5 bg-zinc-900/30">
-//                                     <div className="relative group/search">
-//                                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within/search:text-emerald-400 transition-colors" />
-//                                     <input type="text" placeholder="Filter devices..." value={portSearchQuery} onChange={(e) => setPortSearchQuery(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-lg pl-9 pr-4 py-2.5 text-xs text-zinc-300 focus:outline-none focus:border-emerald-500/30 focus:ring-1 focus:ring-emerald-500/10 placeholder-zinc-600 transition-all" />
-//                                     </div>
-//                                 </div>
-//                             )}
-
-//                             {/* List */}
-//                             <div className="p-4 overflow-y-auto custom-scrollbar flex flex-col gap-2 min-h-[200px] bg-black/20">
-//                                 {availablePorts.length === 0 ? (
-//                                     <div className="flex-1 flex flex-col items-center justify-center text-zinc-600 py-10">
-//                                         <div className="w-12 h-12 rounded-full bg-zinc-900/80 flex items-center justify-center mb-4 shadow-lg ring-1 ring-white/5"><Usb size={20} className="opacity-30" /></div>
-//                                         <p className="text-sm font-medium text-zinc-400">No devices found</p>
-//                                         <p className="text-xs opacity-50 mt-1">Browser security requires manual authorization.</p>
-//                                     </div>
-//                                 ) : (
-//                                     filteredPorts.map((p, index) => {
-//                                         const info = getPortInfo(p, index);
-//                                         const isCurrent = port === p && isConnected;
-//                                         return (
-//                                         <div key={index} onClick={() => openPort(p)} className={`w-full text-left p-3.5 rounded-xl border transition-all group/item relative overflow-hidden cursor-pointer flex items-center justify-between ${isCurrent ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-zinc-900/60 border-white/5 hover:border-emerald-500/20 hover:bg-zinc-800'}`}>
-//                                             <div className="flex items-center gap-4 relative z-10">
-//                                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center border transition-colors ${isCurrent ? 'bg-emerald-500 text-black border-emerald-400' : 'bg-black/50 border-white/5 text-zinc-600 group-hover/item:text-emerald-400 group-hover/item:border-emerald-500/20'}`}><Usb size={18} /></div>
-//                                                 <div>
-//                                                     <div className={`text-sm font-semibold transition-colors ${isCurrent ? 'text-emerald-400' : 'text-zinc-300 group-hover/item:text-white'}`}>{info.name}</div>
-//                                                     <div className="text-[10px] font-mono text-zinc-600 group-hover/item:text-zinc-500 flex items-center gap-2 mt-0.5"><span>{info.meta}</span></div>
-//                                                 </div>
-//                                             </div>
-//                                             <button onClick={(e) => forgetPort(e, p)} className="p-2 rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 opacity-0 group-hover/item:opacity-100 transition-all z-20" title="Forget Device"><Trash2 size={14} /></button>
-//                                         </div>
-//                                         );
-//                                     })
-//                                 )}
-//                             </div>
-
-//                             {/* Footer */}
-//                             <div className="p-5 border-t border-white/5 bg-zinc-900/50">
-//                                 <button onClick={requestNewPort} className="relative w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold tracking-widest transition-all shadow-lg shadow-emerald-900/20 hover:shadow-emerald-500/30 flex items-center justify-center gap-3 group/btn overflow-hidden">
-//                                     <Search size={16} strokeWidth={2.5} className="relative z-10" />
-//                                     <span className="relative z-10">SCAN FOR NEW DEVICES</span>
-//                                 </button>
-//                             </div>
-//                         </div>
-//                     </div>
-//                 )}
-
-//                 {/* Main Area - Left Panel */}
-//                 <main className="flex-1 flex flex-col min-w-0 bg-transparent relative">
-                    
-//                     {/* Top Floating Toolbar */}
-//                     <div className="absolute top-4 left-6 right-6 z-20 flex items-center justify-between">
-//                         <div className={`flex items-center gap-3 px-3 py-2 pr-5 rounded-full border backdrop-blur-md transition-all duration-500 ${isConnected ? 'bg-emerald-950/40 border-emerald-500/30 shadow-[0_0_20px_-5px_rgba(16,185,129,0.3)]' : 'bg-black/40 border-white/10'}`}>
-//                         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isConnected ? 'bg-emerald-500 text-black' : 'bg-zinc-800 text-zinc-500'}`}>{isConnected ? <Activity size={14} className="animate-pulse" /> : <Zap size={14} />}</div>
-//                         <div className="flex flex-col">
-//                             <span className={`text-xs font-bold tracking-wider uppercase ${isConnected ? 'text-emerald-400' : 'text-zinc-500'}`}>{isConnected ? 'Connected' : 'Offline'}</span>
-//                             {isConnected && <span className="text-[9px] text-zinc-500 leading-none">{String(baudRate)} bps</span>}
-//                         </div>
-//                         </div>
-
-//                         <div className="flex items-center gap-3">
-//                             <div className="relative group/search">
-//                                 <div className={`absolute inset-y-0 left-3 flex items-center pointer-events-none transition-colors ${logFilter ? 'text-emerald-400' : 'text-zinc-500'}`}><Filter size={14} /></div>
-//                                 <input type="text" value={logFilter} onChange={(e) => setLogFilter(e.target.value)} placeholder="Search logs..." className={`h-11 pl-9 pr-4 rounded-full border text-xs bg-black/40 backdrop-blur-md transition-all outline-none w-32 focus:w-48 ${logFilter ? 'border-emerald-500/50 text-emerald-300' : 'border-white/10 text-zinc-300 focus:border-white/20'}`} />
-//                                 {logFilter && <button onClick={() => setLogFilter('')} className="absolute inset-y-0 right-2 flex items-center text-zinc-500 hover:text-white"><X size={12} /></button>}
-//                             </div>
-
-//                             <div className="flex items-center p-1.5 rounded-full bg-black/40 border border-white/10 backdrop-blur-md shadow-xl gap-1">
-//                                 <div className="flex bg-white/5 rounded-full p-0.5 border border-white/5">
-//                                     <button onClick={() => setViewMode('ascii')} className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${viewMode === 'ascii' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>ASC</button>
-//                                     <button onClick={() => setViewMode('hex')} className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${viewMode === 'hex' ? 'bg-emerald-600/20 text-emerald-400 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>HEX</button>
-//                                 </div>
-//                                 <div className="w-px h-4 bg-white/10 mx-1"></div>
-//                                 {isConnected && (
-//                                     <button onClick={() => setIsPaused(!isPaused)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isPaused ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'text-zinc-400 hover:bg-white/10 hover:text-white'}`} title={isPaused ? "Resume View" : "Pause View"}>{isPaused ? <Play size={14} fill="currentColor" /> : <Pause size={14} fill="currentColor" />}</button>
-//                                 )}
-//                                 <button onClick={exportData} disabled={logs.length === 0} className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:bg-white/10 hover:text-emerald-400 transition-all disabled:opacity-30" title="Export Log"><Download size={14} strokeWidth={2} /></button>
-//                                 <button onClick={() => setLogs([])} className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:bg-rose-500/20 hover:text-rose-400 transition-all" title="Clear Console"><Trash2 size={14} strokeWidth={2} /></button>
-//                             </div>
-//                         </div>
-//                     </div>
-
-//                     {/* Terminal Area */}
-//                     <div className="flex-1 pt-24 pb-8 px-8 overflow-y-auto custom-scrollbar font-mono text-sm leading-relaxed relative">
-//                         {isPaused && <div className="fixed top-36 right-[420px] px-3 py-1 bg-amber-500/90 text-black text-[10px] font-bold rounded-md shadow-lg z-30 pointer-events-none uppercase tracking-wider backdrop-blur-md">View Paused</div>}
-//                         {logs.length === 0 ? (
-//                             <div className="h-full flex flex-col items-center justify-center opacity-20 select-none">
-//                                 <Terminal size={64} className="text-emerald-400 mb-4" strokeWidth={1} />
-//                                 <p className="text-zinc-500 font-light tracking-wide text-base">READY TO CONNECT</p>
-//                             </div>
-//                         ) : (
-//                             <div className="space-y-0.5">
-//                                 {filteredLogs.map((log) => (
-//                                     <div key={log.id} onClick={() => copyToClipboard(log.text)} className="flex gap-4 hover:bg-white/[0.04] -mx-4 px-4 py-0.5 rounded transition-colors group cursor-pointer relative" title="Click to copy line">
-//                                         {showTimestamp && <span className="text-zinc-600 shrink-0 select-none text-[11px] pt-[3px] font-medium font-sans">{log.timestamp}</span>}
-//                                         <div className={`tracking-tight whitespace-pre-wrap break-all flex-1 ${log.type === 'tx' ? 'text-indigo-300/80' : 'text-emerald-400'}`}>{log.type === 'tx' && <span className="text-indigo-500 mr-2 text-[10px] align-middle inline-block font-bold select-none">TX</span>}{renderLogContent(log.text)}</div>
-//                                     </div>
-//                                 ))}
-//                                 {filteredLogs.length === 0 && logFilter && <div className="text-zinc-500 text-xs text-center py-10">No matching logs found for "{logFilter}"</div>}
-//                                 <div ref={logsEndRef} />
-//                             </div>
-//                         )}
-//                     </div>
-
-//                     {/* Footer Status - With RX/TX Lights */}
-//                     <div className="h-10 flex items-center justify-between px-8 text-xs text-zinc-500 select-none border-t border-white/[0.05] bg-black/20">
-//                         <div className="flex items-center gap-6 font-medium">
-//                             <span className="flex items-center gap-2">
-//                                 <span className={`w-2 h-2 rounded-full transition-all duration-100 ${logs.length > 0 && logs[logs.length-1].type === 'rx' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-emerald-500/20'}`}></span>
-//                                 RX: {logs.filter(l => l.type === 'rx').length}
-//                             </span>
-//                             <span className="flex items-center gap-2">
-//                                 <span className={`w-2 h-2 rounded-full transition-all duration-100 ${logs.length > 0 && logs[logs.length-1].type === 'tx' ? 'bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.8)]' : 'bg-indigo-500/20'}`}></span>
-//                                 TX: {logs.filter(l => l.type === 'tx').length}
-//                             </span>
-//                         </div>
-//                         <label className="flex items-center gap-2 cursor-pointer hover:text-zinc-300 transition-colors group">
-//                             <div className={`w-2 h-2 rounded-full transition-colors ${autoScroll && !isPaused ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-zinc-700'}`}></div>
-//                             <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} className="hidden" />
-//                             AUTO-SCROLL
-//                         </label>
-//                     </div>
-//                 </main>
-
-//                 {/* Sidebar (Right) - 384px (w-96) */}
-//                 <aside className="w-96 bg-black/20 backdrop-blur-xl border-l border-white/[0.06] flex flex-col z-20">
-//                     {/* Content Area */}
-//                     <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-//                         {/* Connection */}
-//                         <div className="space-y-4">
-//                             <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><Plug size={12} /> Connection</h3>
-//                             <div className="relative w-full" ref={baudRef}>
-//                                 <div className="relative flex items-center group">
-//                                     <input type="text" inputMode="numeric" pattern="[0-9]*" value={baudRate} onChange={(e) => { if (/^\d*$/.test(e.target.value)) setBaudRate(e.target.value); }} disabled={isConnected} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-300 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-all disabled:opacity-50 font-mono pr-10" placeholder="Custom Baud..." />
-//                                     <button onClick={() => !isConnected && setIsBaudDropdownOpen(!isBaudDropdownOpen)} disabled={isConnected} className="absolute right-3 p-1 rounded hover:bg-white/5 text-zinc-500 hover:text-emerald-400 disabled:opacity-50 transition-colors"><ChevronDown size={16} className={`transition-transform ${isBaudDropdownOpen ? 'rotate-180' : ''}`} /></button>
-//                                 </div>
-//                                 {isBaudDropdownOpen && (
-//                                     <div className="absolute top-full left-0 right-0 mt-2 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 max-h-56 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-100">
-//                                         {COMMON_BAUD_RATES.map(rate => (
-//                                             <button key={rate} onClick={() => { setBaudRate(rate); setIsBaudDropdownOpen(false); }} className={`w-full text-left px-5 py-2.5 text-xs font-mono hover:bg-emerald-500/10 hover:text-emerald-400 transition-colors flex items-center justify-between border-b border-white/[0.02] last:border-none ${parseInt(baudRate) === rate ? 'text-emerald-400 bg-emerald-500/5' : 'text-zinc-400'}`}><span>{rate}</span>{parseInt(baudRate) === rate && <Check size={14} />}</button>
-//                                         ))}
-//                                     </div>
-//                                 )}
-//                             </div>
-//                             <button onClick={isConnected ? disconnectPort : () => setIsConnectModalOpen(true)} className={`w-full py-4 rounded-xl font-bold text-sm tracking-wide transition-all duration-300 flex items-center justify-center gap-2 shadow-lg ${isConnected ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 hover:shadow-rose-500/10' : 'bg-emerald-600 text-white hover:bg-emerald-500 border border-transparent hover:shadow-emerald-500/30'}`}>{isConnected ? 'DISCONNECT' : 'CONNECT DEVICE'}</button>
-//                         </div>
-
-//                         <div className="h-px bg-white/5 w-full"></div>
-
-//                         {/* Quick Actions */}
-//                         <div className="space-y-4">
-//                             <div className="flex items-center justify-between">
-//                                 <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><Zap size={12} /> Quick Actions</h3>
-//                                 <button onClick={() => setIsEditingCmds(!isEditingCmds)} className={`p-1.5 rounded-lg transition-colors ${isEditingCmds ? 'bg-emerald-500 text-black' : 'hover:bg-white/10 text-zinc-600 hover:text-zinc-300'}`}>{isEditingCmds ? <Save size={12} /> : <Edit2 size={12} />}</button>
-//                             </div>
-//                             {isEditingCmds ? (
-//                                 <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200">
-//                                     {quickCommands.map((cmd) => (
-//                                         <div key={cmd.id} className="flex gap-2">
-//                                         <input type="text" value={cmd.label} onChange={(e) => updateQuickCommand(cmd.id, 'label', e.target.value)} className="w-1/3 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-300 focus:border-emerald-500/50 focus:outline-none" />
-//                                         <input type="text" value={cmd.cmd} onChange={(e) => updateQuickCommand(cmd.id, 'cmd', e.target.value)} className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-emerald-400/80 focus:border-emerald-500/50 focus:outline-none" />
-//                                         <button onClick={() => deleteQuickCommand(cmd.id)} className="p-2 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20"><Trash2 size={14} /></button>
-//                                         </div>
-//                                     ))}
-//                                     <button onClick={addQuickCommand} className="w-full py-2.5 border border-dashed border-white/10 rounded-lg text-xs text-zinc-500 hover:text-emerald-400 transition-colors"><Plus size={14} className="inline mr-1"/> Add</button>
-//                                 </div>
-//                             ) : (
-//                                 <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar -mx-1 px-1">
-//                                     {quickCommands.map((cmd) => (
-//                                         <button key={cmd.id} onClick={() => sendData(cmd.cmd)} disabled={!isConnected} className="flex-none whitespace-nowrap px-4 py-2.5 rounded-lg bg-black/30 border border-white/5 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-400 transition-all text-xs font-medium text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed">{cmd.label}</button>
-//                                     ))}
-//                                 </div>
-//                             )}
-//                         </div>
-
-//                         <div className="h-px bg-white/5 w-full"></div>
-
-//                         {/* Highlight - Vertical Layout */}
-//                         <div className="space-y-4">
-//                             <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><Highlighter size={12} /> Highlight</h3>
-//                             <div className="flex flex-col gap-3">
-//                                 <input type="text" value={highlightKeyword} onChange={(e) => setHighlightKeyword(e.target.value)} placeholder="Enter keyword to highlight..." className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-300 focus:outline-none focus:border-emerald-500/50 transition-all" />
-//                                 <div className="flex gap-2">
-//                                     {[
-//                                     {color: 'text-amber-400 bg-amber-400/10 border-amber-400/20', bg: 'bg-amber-400'},
-//                                     {color: 'text-rose-400 bg-rose-400/10 border-rose-400/20', bg: 'bg-rose-500'},
-//                                     {color: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20', bg: 'bg-emerald-500'},
-//                                     {color: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20', bg: 'bg-cyan-500'},
-//                                     {color: 'text-violet-400 bg-violet-400/10 border-violet-400/20', bg: 'bg-violet-500'},
-//                                     ].map((item, idx) => (
-//                                         <button key={idx} onClick={() => setHighlightColor(item.color)} className={`flex-1 h-8 rounded-lg ${item.bg} ${highlightColor === item.color ? 'ring-2 ring-white/20 scale-105 shadow-lg opacity-100' : 'opacity-20 hover:opacity-80'} transition-all`} />
-//                                     ))}
-//                                 </div>
-//                             </div>
-//                         </div>
-//                     </div>
-
-//                     {/* Transmitter - Fixed Bottom */}
-//                     <div className="flex-none p-6 border-t border-white/5 bg-black/40 z-30">
-//                         <div className="flex flex-col gap-4">
-//                         <div className="relative group">
-//                             <textarea 
-//                                 value={inputText}
-//                                 onChange={(e) => setInputText(e.target.value)}
-//                                 onKeyDown={handleInputKeyDown}
-//                                 placeholder="Input payload..."
-//                                 className="w-full h-32 bg-black/30 border border-white/10 rounded-xl p-4 text-sm font-mono text-zinc-300 focus:outline-none focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/10 resize-none placeholder-zinc-600 transition-all custom-scrollbar"
-//                             />
-//                             <div className="absolute bottom-3 right-3 flex gap-2">
-//                                 <button onClick={() => setUseHexSend(!useHexSend)} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-all text-[10px] font-mono tracking-wide ${useHexSend ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-white/5 border-white/5 text-zinc-500 hover:text-zinc-300'}`}>
-//                                     {useHexSend ? 'HEX' : 'ASCII'}
-//                                 </button>
-//                                 <div className="flex bg-white/5 border border-white/5 rounded-md overflow-hidden">
-//                                     {[
-//                                         { label: '\\n', val: '\\n' },
-//                                         { label: '\\r\\n', val: '\\r\\n' },
-//                                         { label: 'Ø', val: 'none' },
-//                                     ].map(opt => (
-//                                         <button key={opt.val} onClick={() => setLineEnding(opt.val)} className={`px-2 py-1 text-[10px] font-mono transition-all ${lineEnding === opt.val ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'}`}>{opt.label}</button>
-//                                     ))}
-//                                 </div>
-//                             </div>
-//                         </div>
-//                         <button onClick={() => sendData()} disabled={!isConnected} className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-600 text-white text-sm font-bold tracking-wide rounded-xl transition-all shadow-lg shadow-emerald-900/20 disabled:shadow-none flex items-center justify-center gap-2.5 group hover:scale-[1.01] active:scale-[0.99]">
-//                             <Send size={16} className="group-hover:translate-x-0.5 transition-transform" />
-//                             SEND PAYLOAD
-//                         </button>
-//                         </div>
-//                     </div>
-//                 </aside>
-//             </div>
-//         </div>
-//       </div>
-
-//       <style>{`
-//         .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
-//         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-//         .custom-scrollbar::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 5px; }
-//         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #52525b; }
-//         .custom-scrollbar::-webkit-scrollbar-corner { background: transparent; }
-//         @keyframes gradient { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
-//         .animate-gradient { animation: gradient 3s ease infinite; }
-//       `}</style>
-//     </div>
-//   );
-// }
-
-
-
-
-
-// import React, { useState, useRef, useEffect } from 'react';
-// import { 
-//   Terminal, 
-//   Settings, 
-//   Download, 
-//   Trash2, 
-//   Play, 
-//   Square, 
-//   Highlighter, 
-//   Send,
-//   AlertCircle,
-//   Zap,
-//   Activity,
-//   Cpu,
-//   Command,
-//   Radio,
-//   Binary,
-//   Copy,
-//   Plus,
-//   X,
-//   Pause,
-//   Edit2,
-//   Save,
-//   Plug,
-//   Search,
-//   Usb,
-//   Monitor,
-//   Unplug,
-//   Hash,
-//   Filter,
-//   ChevronDown,
-//   Check,
-//   ArrowUp,
-//   ArrowDown,
-//   Minimize2,
-//   Maximize2
-// } from 'lucide-react';
-
-// export default function App() {
-//   // --- 状态定义 ---
-
-//   // 串口相关
-//   const [port, setPort] = useState(null);
-//   const [availablePorts, setAvailablePorts] = useState([]); 
-//   const [isConnected, setIsConnected] = useState(false);
-  
-//   // 核心引用
-//   const readerRef = useRef(null);
-//   const writerRef = useRef(null);
-//   const readableStreamClosedRef = useRef(null);
-//   const writableStreamClosedRef = useRef(null);
-//   const baudRef = useRef(null);
-//   const bufferRef = useRef('');
-  
-//   // 界面交互状态
-//   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
-//   const [isBaudDropdownOpen, setIsBaudDropdownOpen] = useState(false);
-//   const [portSearchQuery, setPortSearchQuery] = useState('');
-//   const [isPaused, setIsPaused] = useState(false);
-//   const isPausedRef = useRef(false);
-
-//   // 日志相关
-//   const [logs, setLogs] = useState([]);
-//   const [autoScroll, setAutoScroll] = useState(true);
-//   const logsEndRef = useRef(null);
-//   const [viewMode, setViewMode] = useState('ascii'); // 'ascii' | 'hex'
-//   const [logFilter, setLogFilter] = useState('');
-
-//   // --- 持久化状态 (localStorage) - 增强版 ---
-//   const usePersistedState = (key, defaultValue) => {
-//     const [state, setState] = useState(() => {
-//       try {
-//         const storedValue = localStorage.getItem(key);
-//         return storedValue ? JSON.parse(storedValue) : defaultValue;
-//       } catch (error) {
-//         console.error(`Error parsing localStorage key "${key}":`, error);
-//         return defaultValue;
-//       }
-//     });
-
-//     useEffect(() => {
-//       try {
-//         localStorage.setItem(key, JSON.stringify(state));
-//       } catch (error) {
-//         console.error(`Error setting localStorage key "${key}":`, error);
-//       }
-//     }, [key, state]);
-
-//     return [state, setState];
-//   };
-
-//   // 使用持久化状态
-//   const [baudRate, setBaudRate] = usePersistedState('serial_baudrate', 115200);
-//   const [highlightKeyword, setHighlightKeyword] = usePersistedState('serial_highlight_kw', '');
-//   const [highlightColor, setHighlightColor] = usePersistedState('serial_highlight_color', 'text-amber-400 bg-amber-400/10 border-amber-400/20');
-//   const [quickCommands, setQuickCommands] = usePersistedState('serial_quick_cmds', [
-//     { id: 1, label: 'AT Test', cmd: 'AT' },
-//     { id: 2, label: 'Reset', cmd: 'AT+RST' },
-//     { id: 3, label: 'Version', cmd: 'AT+GMR' },
-//     { id: 4, label: 'Scan', cmd: 'AT+CWLAP' },
-//     { id: 5, label: 'IP Addr', cmd: 'AT+CIFSR' },
-//   ]);
-//   const [useHexSend, setUseHexSend] = usePersistedState('serial_use_hex_send', false);
-//   const [lineEnding, setLineEnding] = usePersistedState('serial_line_ending', '\\n'); // none, \n, \r, \r\n
-
-//   // 发送相关
-//   const [inputText, setInputText] = useState('');
-//   const [showTimestamp, setShowTimestamp] = useState(true);
-//   const [isEditingCmds, setIsEditingCmds] = useState(false);
-//   const [copyFeedback, setCopyFeedback] = useState(null);
-
-//   // 历史记录相关
-//   const [sendHistory, setSendHistory] = useState([]);
-//   const [historyIndex, setHistoryIndex] = useState(-1); // -1 表示当前输入
-
-//   // 浏览器兼容性
-//   const isWebSerialSupported = 'serial' in navigator;
-
-//   // --- Effect Hooks ---
-
-//   useEffect(() => {
-//     document.title = "SerialFlux - Pro Web Debugger";
-//   }, []);
-
-//   useEffect(() => {
-//     isPausedRef.current = isPaused;
-//   }, [isPaused]);
-
-//   // 点击外部关闭波特率下拉
-//   useEffect(() => {
-//     const handleClickOutside = (event) => {
-//       if (baudRef.current && !baudRef.current.contains(event.target)) {
-//         setIsBaudDropdownOpen(false);
-//       }
-//     };
-//     document.addEventListener('mousedown', handleClickOutside);
-//     return () => document.removeEventListener('mousedown', handleClickOutside);
-//   }, []);
-
-//   // 端口监听
-//   useEffect(() => {
-//     if (!isWebSerialSupported) return;
-//     const updatePorts = async () => {
-//       try {
-//         const ports = await navigator.serial.getPorts();
-//         setAvailablePorts(ports);
-//       } catch (e) { console.error(e); }
-//     };
-//     updatePorts();
-//     const handleConnectEvent = () => updatePorts();
-//     const handleDisconnectEvent = (e) => {
-//       updatePorts();
-//       if (port === e.target) disconnectPort();
-//     };
-//     navigator.serial.addEventListener('connect', handleConnectEvent);
-//     navigator.serial.addEventListener('disconnect', handleDisconnectEvent);
-//     return () => {
-//       navigator.serial.removeEventListener('connect', handleConnectEvent);
-//       navigator.serial.removeEventListener('disconnect', handleDisconnectEvent);
-//     };
-//   }, [port]);
-
-//   // 自动滚动
-//   useEffect(() => {
-//     if (autoScroll && !isPaused && logsEndRef.current && !logFilter) {
-//       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-//     }
-//   }, [logs, autoScroll, viewMode, isPaused, logFilter]);
-
-//   // --- 核心逻辑 ---
-
-//   const openPort = async (selectedPort) => {
-//     try {
-//       if (!selectedPort) return;
-//       if (port && isConnected) await disconnectPort();
-
-//       // 确保 baudRate 是数字，防止从 localStorage 读到奇怪的东西导致连接失败
-//       const baud = parseInt(baudRate) || 115200;
-//       await selectedPort.open({ baudRate: baud });
-      
-//       setPort(selectedPort);
-//       setIsConnected(true);
-//       setIsPaused(false);
-//       setIsConnectModalOpen(false);
-//       bufferRef.current = '';
-
-//       const ports = await navigator.serial.getPorts();
-//       setAvailablePorts(ports);
-      
-//       const textDecoder = new TextDecoderStream();
-//       const readableStreamClosed = selectedPort.readable.pipeTo(textDecoder.writable);
-//       readableStreamClosedRef.current = readableStreamClosed;
-//       const reader = textDecoder.readable.getReader();
-//       readerRef.current = reader;
-
-//       const textEncoder = new TextEncoderStream();
-//       const writableStreamClosed = textEncoder.readable.pipeTo(selectedPort.writable);
-//       writableStreamClosedRef.current = writableStreamClosed;
-//       const writer = textEncoder.writable.getWriter();
-//       writerRef.current = writer;
-
-//       readLoop();
-//     } catch (error) {
-//       console.error('Connection failed:', error);
-//       alert('Connection failed: ' + error.message);
-//     }
-//   };
-
-//   const readLoop = async () => {
-//     try {
-//       while (true) {
-//         const { value, done } = await readerRef.current.read();
-//         if (done) {
-//           readerRef.current.releaseLock();
-//           break;
-//         }
-//         if (value) processIncomingData(value);
-//       }
-//     } catch (error) { console.error('Read error:', error); }
-//   };
-
-//   const processIncomingData = (chunk) => {
-//     bufferRef.current += chunk;
-//     if (bufferRef.current.includes('\n')) {
-//       const lines = bufferRef.current.split(/\r?\n/);
-//       const completeLines = lines.slice(0, -1);
-//       bufferRef.current = lines[lines.length - 1];
-//       if (!isPausedRef.current && completeLines.length > 0) {
-//         addLogs(completeLines, 'rx');
-//       }
-//     }
-//   };
-
-//   const disconnectPort = async () => {
-//     try {
-//       if (readerRef.current) {
-//         await readerRef.current.cancel();
-//         await readableStreamClosedRef.current.catch(() => {});
-//         readerRef.current = null;
-//       }
-//       if (writerRef.current) {
-//         await writerRef.current.close();
-//         await writableStreamClosedRef.current;
-//         writerRef.current = null;
-//       }
-//       if (port) {
-//         await port.close();
-//         setPort(null);
-//         setIsConnected(false);
-//       }
-//     } catch (error) { console.error('Disconnect error:', error); }
-//   };
-
-//   const addLogs = (newLines, type) => {
-//     setLogs(prev => {
-//       const newEntries = newLines.map(text => ({
-//         id: Date.now() + Math.random(),
-//         timestamp: new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 }),
-//         text: text,
-//         type: type 
-//       }));
-//       const updated = [...prev, ...newEntries];
-//       if (updated.length > 2000) return updated.slice(-2000);
-//       return updated;
-//     });
-//   };
-
-//   // --- 导出数据功能 ---
-//   const exportData = () => {
-//     const content = logs.map(l => `[${l.timestamp}] ${l.type === 'tx' ? 'TX' : 'RX'}: ${l.text}`).join('\n');
-//     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-//     const url = URL.createObjectURL(blob);
-//     const link = document.createElement('a');
-//     link.href = url;
-//     link.download = `serial_log_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.txt`;
-//     document.body.appendChild(link);
-//     link.click();
-//     document.body.removeChild(link);
-//   };
-
-//   // --- 发送逻辑 ---
-
-//   const sendData = async (textToSend = null) => {
-//     const rawData = textToSend !== null ? textToSend : inputText;
-//     if (!port || !writerRef.current || !rawData) return;
-
-//     if (textToSend === null && rawData.trim() !== '') {
-//         setSendHistory(prev => {
-//             const newHistory = [rawData, ...prev].slice(0, 50); 
-//             return newHistory;
-//         });
-//         setHistoryIndex(-1); 
-//     }
-
-//     try {
-//       if (useHexSend) {
-//           alert("提示：当前 Web 架构主要针对文本调试。HEX 模式发送暂未完全实装 (需重写底层流管道)。");
-//       } else {
-//           // ASCII 模式发送
-//           let finalData = rawData;
-//           if (lineEnding === '\\n') finalData += '\n';
-//           else if (lineEnding === '\\r') finalData += '\r';
-//           else if (lineEnding === '\\r\\n') finalData += '\r\n';
-          
-//           await writerRef.current.write(finalData);
-//           addLogs([finalData.replace(/\r/g, '').replace(/\n/g, '')], 'tx'); 
-//       }
-      
-//       if (textToSend === null) setInputText(''); 
-//     } catch (error) {
-//       console.error('Send failed:', error);
-//     }
-//   };
-
-//   const handleInputKeyDown = (e) => {
-//     if (e.key === 'Enter') {
-//         if (e.ctrlKey) {
-//             sendData();
-//         }
-//     } else if (e.key === 'ArrowUp') {
-//         e.preventDefault();
-//         if (sendHistory.length > 0) {
-//             const nextIndex = Math.min(historyIndex + 1, sendHistory.length - 1);
-//             setHistoryIndex(nextIndex);
-//             setInputText(sendHistory[nextIndex]);
-//         }
-//     } else if (e.key === 'ArrowDown') {
-//         e.preventDefault();
-//         if (historyIndex > 0) {
-//             const nextIndex = historyIndex - 1;
-//             setHistoryIndex(nextIndex);
-//             setInputText(sendHistory[nextIndex]);
-//         } else if (historyIndex === 0) {
-//             setHistoryIndex(-1);
-//             setInputText(''); 
-//         }
-//     }
-//   };
-
-//   // --- 辅助函数 ---
-
-//   const forgetPort = async (e, portToForget) => {
-//     e.stopPropagation();
-//     try {
-//         if (portToForget === port && isConnected) await disconnectPort();
-//         await portToForget.forget();
-//         const ports = await navigator.serial.getPorts();
-//         setAvailablePorts(ports);
-//     } catch (error) {
-//         alert('Could not forget port. Require Chrome 103+.');
-//     }
-//   };
-
-//   const requestNewPort = async () => {
-//     try {
-//       const selectedPort = await navigator.serial.requestPort();
-//       openPort(selectedPort);
-//     } catch (error) { console.log('User cancelled'); }
-//   };
-
-//   const toHexDisplay = (str) => {
-//     let result = '';
-//     for (let i = 0; i < str.length; i++) {
-//       const hex = str.charCodeAt(i).toString(16).toUpperCase().padStart(2, '0');
-//       result += hex + ' ';
-//     }
-//     return result.trim();
-//   };
-
-//   const copyToClipboard = (text) => {
-//     navigator.clipboard.writeText(text);
-//     setCopyFeedback(text.substring(0, 20) + '...');
-//     setTimeout(() => setCopyFeedback(null), 1500);
-//   };
-
-//   const renderLogContent = (text) => {
-//     // 强制转换为字符串，防止对象渲染错误
-//     const safeText = String(text);
-    
-//     const contentToRender = viewMode === 'hex' ? toHexDisplay(safeText) : safeText;
-//     if (!highlightKeyword || viewMode === 'hex') return contentToRender;
-//     const parts = contentToRender.split(new RegExp(`(${highlightKeyword})`, 'gi'));
-//     return (
-//       <span>
-//         {parts.map((part, i) => 
-//           part.toLowerCase() === highlightKeyword.toLowerCase() ? (
-//             <span key={i} className={`${highlightColor} font-bold px-1.5 py-0.5 rounded border text-[11px] tracking-wide mx-0.5 shadow-[0_0_10px_rgba(0,0,0,0.2)]`}>
-//               {part}
-//             </span>
-//           ) : (part)
-//         )}
-//       </span>
-//     );
-//   };
-
-//   // 格式化相关
-//   const getPortInfo = (port, index) => {
-//     const info = port.getInfo();
-//     if (info.usbVendorId && info.usbProductId) {
-//       const vid = info.usbVendorId.toString(16).toUpperCase().padStart(4, '0');
-//       const pid = info.usbProductId.toString(16).toUpperCase().padStart(4, '0');
-//       return { name: `USB Serial Device`, meta: `VID:${vid} PID:${pid}`, id: `${vid}:${pid}` };
-//     }
-//     return { name: `Serial Port ${index + 1}`, meta: 'Generic Device', id: `generic-${index}` };
-//   };
-
-//   const filteredPorts = availablePorts.filter((p, index) => {
-//     if (!portSearchQuery) return true;
-//     const info = getPortInfo(p, index);
-//     const searchLower = portSearchQuery.toLowerCase();
-//     return info.name.toLowerCase().includes(searchLower) || info.meta.toLowerCase().includes(searchLower);
-//   });
-
-//   const filteredLogs = logs.filter(log => {
-//     if (!logFilter) return true;
-//     // 强制转换防止崩溃
-//     return String(log.text).toLowerCase().includes(logFilter.toLowerCase());
-//   });
-
-//   const updateQuickCommand = (id, field, value) => {
-//     setQuickCommands(prev => prev.map(cmd => cmd.id === id ? { ...cmd, [field]: value } : cmd));
-//   };
-//   const addQuickCommand = () => {
-//     const newId = Math.max(0, ...quickCommands.map(c => c.id)) + 1;
-//     setQuickCommands([...quickCommands, { id: newId, label: 'Cmd', cmd: '' }]);
-//   };
-//   const deleteQuickCommand = (id) => {
-//     setQuickCommands(prev => prev.filter(c => c.id !== id));
-//   };
-
-//   if (!isWebSerialSupported) {
-//     return (
-//       <div className="flex h-screen items-center justify-center bg-zinc-950 text-white font-sans">
-//         <div className="text-center p-8 bg-zinc-900/50 rounded-2xl border border-white/10 shadow-2xl max-w-md backdrop-blur-xl">
-//           <AlertCircle className="w-16 h-16 text-rose-500 mx-auto mb-6 opacity-80" strokeWidth={1.5} />
-//           <h2 className="text-2xl font-bold mb-3 tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">Browser Not Supported</h2>
-//           <p className="text-zinc-500 leading-relaxed text-sm">Web Serial API is required. Please use Chrome or Edge.</p>
-//         </div>
-//       </div>
-//     );
-//   }
-
-//   const COMMON_BAUD_RATES = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 74880, 115200, 230400, 460800, 921600, 1000000, 2000000];
-
-//   return (
-//     // 桌面环境容器 (模拟桌面)
-//     <div className="flex h-screen w-full items-center justify-center bg-[#050505] text-zinc-300 font-sans selection:bg-emerald-500/30 selection:text-emerald-200 overflow-hidden relative">
-      
-//       {/* 桌面背景 - 极光网格 */}
-//       <div className="absolute inset-0 pointer-events-none z-0">
-//          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-emerald-900/20 via-zinc-950/80 to-zinc-950"></div>
-//          <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}></div>
-//          <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-//       </div>
-
-//       {/* 应用窗口 (Window Container) - 模拟实物面板 */}
-//       <div className="relative w-[95vw] h-[90vh] max-w-[1280px] max-h-[850px] flex flex-col animate-in fade-in zoom-in-95 duration-500 shadow-[0_0_60px_-15px_rgba(0,0,0,0.8)]">
-        
-//         {/* 外壳边框 (Bezel) */}
-//         <div className="absolute inset-0 rounded-2xl border border-white/5 bg-zinc-900/95 backdrop-blur-3xl z-0 box-border pointer-events-none ring-1 ring-white/5">
-//             {/* 顶部高光 */}
-//             <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-//         </div>
-
-//         {/* 装饰性：螺丝孔位 */}
-//         <div className="absolute top-3 left-3 w-2 h-2 rounded-full bg-black/60 border border-white/5 z-20 pointer-events-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)] opacity-40"></div>
-//         <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-black/60 border border-white/5 z-20 pointer-events-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)] opacity-40"></div>
-//         <div className="absolute bottom-3 left-3 w-2 h-2 rounded-full bg-black/60 border border-white/5 z-20 pointer-events-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)] opacity-40"></div>
-//         <div className="absolute bottom-3 right-3 w-2 h-2 rounded-full bg-black/60 border border-white/5 z-20 pointer-events-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)] opacity-40"></div>
-
-//         {/* 内容区域容器 */}
-//         <div className="relative z-10 flex flex-col w-full h-full rounded-2xl overflow-hidden bg-transparent">
-            
-//             {/* Window Title Bar (Mac Style + Industrial Text) */}
-//             <div className="h-10 bg-black/20 border-b border-white/5 flex items-center justify-between px-6 select-none flex-none z-50 backdrop-blur-sm">
-//                 <div className="flex gap-2 group">
-//                     <div className="w-3 h-3 rounded-full bg-[#FF5F56] border border-black/20 shadow-inner"></div>
-//                     <div className="w-3 h-3 rounded-full bg-[#FFBD2E] border border-black/20 shadow-inner"></div>
-//                     <div className="w-3 h-3 rounded-full bg-[#27C93F] border border-black/20 shadow-inner"></div>
-//                 </div>
-//                 <div className="text-xs font-bold text-zinc-500 tracking-widest uppercase flex items-center gap-2 opacity-80">
-//                     <Command size={12} className="text-emerald-500" />
-//                     SERIAL FLUX PRO <span className="text-[9px] px-1 bg-white/5 rounded text-zinc-600 font-mono">V1.0</span>
-//                 </div>
-//                 <div className="w-14"></div> 
-//             </div>
-
-//             {/* Inner Content Area */}
-//             <div className="flex-1 flex overflow-hidden relative">
-                
-//                 {/* Copy Feedback Toast (Inside Window) */}
-//                 {copyFeedback && (
-//                     <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-900 border border-emerald-500/20 text-emerald-400 px-4 py-2 rounded-full shadow-2xl text-xs font-medium animate-in fade-in slide-in-from-top-2 duration-200 pointer-events-none flex items-center gap-2">
-//                     <Copy size={14} />
-//                     {copyFeedback}
-//                     </div>
-//                 )}
-
-//                 {/* ... Connect Modal Component (Scoped) ... */}
-//                 {isConnectModalOpen && (
-//                     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-[2px] animate-in fade-in duration-200">
-//                         <div className="relative w-[500px] bg-[#0c0c0e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80%] ring-1 ring-white/10">
-//                             {/* Modal Header */}
-//                             <div className="p-6 border-b border-white/5 flex items-center justify-between bg-zinc-900/50">
-//                                 <div className="flex items-center gap-4">
-//                                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 flex items-center justify-center ring-1 ring-white/5 shadow-inner">
-//                                         <Plug size={20} className="text-emerald-400" />
-//                                     </div>
-//                                     <div>
-//                                         <h3 className="text-base font-bold text-zinc-100 tracking-tight">Device Manager</h3>
-//                                         <p className="text-xs text-zinc-500 mt-0.5 font-medium">Select a serial port to connect</p>
-//                                     </div>
-//                                 </div>
-//                                 <button onClick={() => setIsConnectModalOpen(false)} className="p-2 hover:bg-white/10 rounded-lg text-zinc-500 hover:text-white transition-colors"><X size={18} /></button>
-//                             </div>
-
-//                             {/* Search */}
-//                             {availablePorts.length > 0 && (
-//                                 <div className="px-6 py-4 border-b border-white/5 bg-zinc-900/30">
-//                                     <div className="relative group/search">
-//                                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within/search:text-emerald-400 transition-colors" />
-//                                     <input type="text" placeholder="Filter devices..." value={portSearchQuery} onChange={(e) => setPortSearchQuery(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-lg pl-9 pr-4 py-2.5 text-xs text-zinc-300 focus:outline-none focus:border-emerald-500/30 focus:ring-1 focus:ring-emerald-500/10 placeholder-zinc-600 transition-all" />
-//                                     </div>
-//                                 </div>
-//                             )}
-
-//                             {/* List */}
-//                             <div className="p-4 overflow-y-auto custom-scrollbar flex flex-col gap-2 min-h-[200px] bg-black/20">
-//                                 {availablePorts.length === 0 ? (
-//                                     <div className="flex-1 flex flex-col items-center justify-center text-zinc-600 py-10">
-//                                         <div className="w-12 h-12 rounded-full bg-zinc-900/80 flex items-center justify-center mb-4 shadow-lg ring-1 ring-white/5"><Usb size={20} className="opacity-30" /></div>
-//                                         <p className="text-sm font-medium text-zinc-400">No devices found</p>
-//                                         <p className="text-xs opacity-50 mt-1">Browser security requires manual authorization.</p>
-//                                     </div>
-//                                 ) : (
-//                                     filteredPorts.map((p, index) => {
-//                                         const info = getPortInfo(p, index);
-//                                         const isCurrent = port === p && isConnected;
-//                                         return (
-//                                         <div key={index} onClick={() => openPort(p)} className={`w-full text-left p-3.5 rounded-xl border transition-all group/item relative overflow-hidden cursor-pointer flex items-center justify-between ${isCurrent ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-zinc-900/60 border-white/5 hover:border-emerald-500/20 hover:bg-zinc-800'}`}>
-//                                             <div className="flex items-center gap-4 relative z-10">
-//                                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center border transition-colors ${isCurrent ? 'bg-emerald-500 text-black border-emerald-400' : 'bg-black/50 border-white/5 text-zinc-600 group-hover/item:text-emerald-400 group-hover/item:border-emerald-500/20'}`}><Usb size={18} /></div>
-//                                                 <div>
-//                                                     <div className={`text-sm font-semibold transition-colors ${isCurrent ? 'text-emerald-400' : 'text-zinc-300 group-hover/item:text-white'}`}>{info.name}</div>
-//                                                     <div className="text-[10px] font-mono text-zinc-600 group-hover/item:text-zinc-500 flex items-center gap-2 mt-0.5"><span>{info.meta}</span></div>
-//                                                 </div>
-//                                             </div>
-//                                             <button onClick={(e) => forgetPort(e, p)} className="p-2 rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 opacity-0 group-hover/item:opacity-100 transition-all z-20" title="Forget Device"><Trash2 size={14} /></button>
-//                                         </div>
-//                                         );
-//                                     })
-//                                 )}
-//                             </div>
-
-//                             {/* Footer */}
-//                             <div className="p-5 border-t border-white/5 bg-zinc-900/50">
-//                                 <button onClick={requestNewPort} className="relative w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold tracking-widest transition-all shadow-lg shadow-emerald-900/20 hover:shadow-emerald-500/30 flex items-center justify-center gap-3 group/btn overflow-hidden">
-//                                     <Search size={16} strokeWidth={2.5} className="relative z-10" />
-//                                     <span className="relative z-10">SCAN FOR NEW DEVICES</span>
-//                                 </button>
-//                             </div>
-//                         </div>
-//                     </div>
-//                 )}
-
-//                 {/* Main Area - Left Panel */}
-//                 <main className="flex-1 flex flex-col min-w-0 bg-transparent relative">
-                    
-//                     {/* Top Floating Toolbar */}
-//                     <div className="absolute top-4 left-6 right-6 z-20 flex items-center justify-between">
-//                         <div className={`flex items-center gap-3 px-3 py-2 pr-5 rounded-full border backdrop-blur-md transition-all duration-500 ${isConnected ? 'bg-emerald-950/40 border-emerald-500/30 shadow-[0_0_20px_-5px_rgba(16,185,129,0.3)]' : 'bg-black/40 border-white/10'}`}>
-//                         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isConnected ? 'bg-emerald-500 text-black' : 'bg-zinc-800 text-zinc-500'}`}>{isConnected ? <Activity size={14} className="animate-pulse" /> : <Zap size={14} />}</div>
-//                         <div className="flex flex-col">
-//                             <span className={`text-xs font-bold tracking-wider uppercase ${isConnected ? 'text-emerald-400' : 'text-zinc-500'}`}>{isConnected ? 'Connected' : 'Offline'}</span>
-//                             {isConnected && <span className="text-[9px] text-zinc-500 leading-none">{String(baudRate)} bps</span>}
-//                         </div>
-//                         </div>
-
-//                         <div className="flex items-center gap-3">
-//                             <div className="relative group/search">
-//                                 <div className={`absolute inset-y-0 left-3 flex items-center pointer-events-none transition-colors ${logFilter ? 'text-emerald-400' : 'text-zinc-500'}`}><Filter size={14} /></div>
-//                                 <input type="text" value={logFilter} onChange={(e) => setLogFilter(e.target.value)} placeholder="Search logs..." className={`h-11 pl-9 pr-4 rounded-full border text-xs bg-black/40 backdrop-blur-md transition-all outline-none w-32 focus:w-48 ${logFilter ? 'border-emerald-500/50 text-emerald-300' : 'border-white/10 text-zinc-300 focus:border-white/20'}`} />
-//                                 {logFilter && <button onClick={() => setLogFilter('')} className="absolute inset-y-0 right-2 flex items-center text-zinc-500 hover:text-white"><X size={12} /></button>}
-//                             </div>
-
-//                             <div className="flex items-center p-1.5 rounded-full bg-black/40 border border-white/10 backdrop-blur-md shadow-xl gap-1">
-//                                 <div className="flex bg-white/5 rounded-full p-0.5 border border-white/5">
-//                                     <button onClick={() => setViewMode('ascii')} className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${viewMode === 'ascii' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>ASC</button>
-//                                     <button onClick={() => setViewMode('hex')} className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${viewMode === 'hex' ? 'bg-emerald-600/20 text-emerald-400 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>HEX</button>
-//                                 </div>
-//                                 <div className="w-px h-4 bg-white/10 mx-1"></div>
-//                                 {isConnected && (
-//                                     <button onClick={() => setIsPaused(!isPaused)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isPaused ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'text-zinc-400 hover:bg-white/10 hover:text-white'}`} title={isPaused ? "Resume View" : "Pause View"}>{isPaused ? <Play size={14} fill="currentColor" /> : <Pause size={14} fill="currentColor" />}</button>
-//                                 )}
-//                                 <button onClick={exportData} disabled={logs.length === 0} className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:bg-white/10 hover:text-emerald-400 transition-all disabled:opacity-30" title="Export Log"><Download size={14} strokeWidth={2} /></button>
-//                                 <button onClick={() => setLogs([])} className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:bg-rose-500/20 hover:text-rose-400 transition-all" title="Clear Console"><Trash2 size={14} strokeWidth={2} /></button>
-//                             </div>
-//                         </div>
-//                     </div>
-
-//                     {/* Terminal Area */}
-//                     <div className="flex-1 pt-24 pb-8 px-8 overflow-y-auto custom-scrollbar font-mono text-sm leading-relaxed relative">
-//                         {isPaused && (
-//                             <div className="fixed top-24 left-1/2 -translate-x-1/2 mt-12 px-3 py-1 bg-amber-500/90 text-black text-[10px] font-bold rounded-md shadow-lg z-30 pointer-events-none uppercase tracking-wider backdrop-blur-md">
-//                                 View Paused
-//                             </div>
-//                         )}
-//                         {logs.length === 0 ? (
-//                             <div className="h-full flex flex-col items-center justify-center opacity-20 select-none">
-//                                 <Terminal size={64} className="text-emerald-400 mb-4" strokeWidth={1} />
-//                                 <p className="text-zinc-500 font-light tracking-wide text-base">READY TO CONNECT</p>
-//                             </div>
-//                         ) : (
-//                             <div className="space-y-0.5">
-//                                 {filteredLogs.map((log) => (
-//                                     <div key={log.id} onClick={() => copyToClipboard(log.text)} className="flex gap-4 hover:bg-white/[0.04] -mx-4 px-4 py-0.5 rounded transition-colors group cursor-pointer relative" title="Click to copy line">
-//                                         {showTimestamp && <span className="text-zinc-600 shrink-0 select-none text-[11px] pt-[3px] font-medium font-sans">{log.timestamp}</span>}
-//                                         <div className={`tracking-tight whitespace-pre-wrap break-all flex-1 ${log.type === 'tx' ? 'text-indigo-300/80' : 'text-emerald-400'}`}>{log.type === 'tx' && <span className="text-indigo-500 mr-2 text-[10px] align-middle inline-block font-bold select-none">TX</span>}{renderLogContent(log.text)}</div>
-//                                     </div>
-//                                 ))}
-//                                 {filteredLogs.length === 0 && logFilter && <div className="text-zinc-500 text-xs text-center py-10">No matching logs found for "{logFilter}"</div>}
-//                                 <div ref={logsEndRef} />
-//                             </div>
-//                         )}
-//                     </div>
-
-//                     {/* Footer Status - With RX/TX Lights */}
-//                     <div className="h-10 flex items-center justify-between px-8 text-xs text-zinc-500 select-none border-t border-white/[0.05] bg-black/20">
-//                         <div className="flex items-center gap-6 font-medium">
-//                             <span className="flex items-center gap-2">
-//                                 <span className={`w-2 h-2 rounded-full transition-all duration-100 ${logs.length > 0 && logs[logs.length-1].type === 'rx' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-emerald-500/20'}`}></span>
-//                                 RX: {logs.filter(l => l.type === 'rx').length}
-//                             </span>
-//                             <span className="flex items-center gap-2">
-//                                 <span className={`w-2 h-2 rounded-full transition-all duration-100 ${logs.length > 0 && logs[logs.length-1].type === 'tx' ? 'bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.8)]' : 'bg-indigo-500/20'}`}></span>
-//                                 TX: {logs.filter(l => l.type === 'tx').length}
-//                             </span>
-//                         </div>
-//                         <label className="flex items-center gap-2 cursor-pointer hover:text-zinc-300 transition-colors group">
-//                             <div className={`w-2 h-2 rounded-full transition-colors ${autoScroll && !isPaused ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-zinc-700'}`}></div>
-//                             <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} className="hidden" />
-//                             AUTO-SCROLL
-//                         </label>
-//                     </div>
-//                 </main>
-
-//                 {/* Sidebar (Right) - 384px (w-96) */}
-//                 <aside className="w-96 bg-black/20 backdrop-blur-xl border-l border-white/[0.06] flex flex-col z-20">
-//                     {/* Content Area */}
-//                     <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-//                         {/* Connection */}
-//                         <div className="space-y-4">
-//                             <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><Plug size={12} /> Connection</h3>
-//                             <div className="relative w-full" ref={baudRef}>
-//                                 <div className="relative flex items-center group">
-//                                     <input type="text" inputMode="numeric" pattern="[0-9]*" value={baudRate} onChange={(e) => { if (/^\d*$/.test(e.target.value)) setBaudRate(e.target.value); }} disabled={isConnected} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-300 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-all disabled:opacity-50 font-mono pr-10" placeholder="Custom Baud..." />
-//                                     <button onClick={() => !isConnected && setIsBaudDropdownOpen(!isBaudDropdownOpen)} disabled={isConnected} className="absolute right-3 p-1 rounded hover:bg-white/5 text-zinc-500 hover:text-emerald-400 disabled:opacity-50 transition-colors"><ChevronDown size={16} className={`transition-transform ${isBaudDropdownOpen ? 'rotate-180' : ''}`} /></button>
-//                                 </div>
-//                                 {isBaudDropdownOpen && (
-//                                     <div className="absolute top-full left-0 right-0 mt-2 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 max-h-56 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-100">
-//                                         {COMMON_BAUD_RATES.map(rate => (
-//                                             <button key={rate} onClick={() => { setBaudRate(rate); setIsBaudDropdownOpen(false); }} className={`w-full text-left px-5 py-2.5 text-xs font-mono hover:bg-emerald-500/10 hover:text-emerald-400 transition-colors flex items-center justify-between border-b border-white/[0.02] last:border-none ${parseInt(baudRate) === rate ? 'text-emerald-400 bg-emerald-500/5' : 'text-zinc-400'}`}><span>{rate}</span>{parseInt(baudRate) === rate && <Check size={14} />}</button>
-//                                         ))}
-//                                     </div>
-//                                 )}
-//                             </div>
-//                             <button onClick={isConnected ? disconnectPort : () => setIsConnectModalOpen(true)} className={`w-full py-4 rounded-xl font-bold text-sm tracking-wide transition-all duration-300 flex items-center justify-center gap-2 shadow-lg ${isConnected ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 hover:shadow-rose-500/10' : 'bg-emerald-600 text-white hover:bg-emerald-500 border border-transparent hover:shadow-emerald-500/30'}`}>{isConnected ? 'DISCONNECT' : 'CONNECT DEVICE'}</button>
-//                         </div>
-
-//                         <div className="h-px bg-white/5 w-full"></div>
-
-//                         {/* Quick Actions */}
-//                         <div className="space-y-4">
-//                             <div className="flex items-center justify-between">
-//                                 <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><Zap size={12} /> Quick Actions</h3>
-//                                 <button onClick={() => setIsEditingCmds(!isEditingCmds)} className={`p-1.5 rounded-lg transition-colors ${isEditingCmds ? 'bg-emerald-500 text-black' : 'hover:bg-white/10 text-zinc-600 hover:text-zinc-300'}`}>{isEditingCmds ? <Save size={12} /> : <Edit2 size={12} />}</button>
-//                             </div>
-//                             {isEditingCmds ? (
-//                                 <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200">
-//                                     {quickCommands.map((cmd) => (
-//                                         <div key={cmd.id} className="flex gap-2">
-//                                         <input type="text" value={cmd.label} onChange={(e) => updateQuickCommand(cmd.id, 'label', e.target.value)} className="w-1/3 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-300 focus:border-emerald-500/50 focus:outline-none" />
-//                                         <input type="text" value={cmd.cmd} onChange={(e) => updateQuickCommand(cmd.id, 'cmd', e.target.value)} className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-emerald-400/80 focus:border-emerald-500/50 focus:outline-none" />
-//                                         <button onClick={() => deleteQuickCommand(cmd.id)} className="p-2 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20"><Trash2 size={14} /></button>
-//                                         </div>
-//                                     ))}
-//                                     <button onClick={addQuickCommand} className="w-full py-2.5 border border-dashed border-white/10 rounded-lg text-xs text-zinc-500 hover:text-emerald-400 transition-colors"><Plus size={14} className="inline mr-1"/> Add</button>
-//                                 </div>
-//                             ) : (
-//                                 <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar -mx-1 px-1">
-//                                     {quickCommands.map((cmd) => (
-//                                         <button key={cmd.id} onClick={() => sendData(cmd.cmd)} disabled={!isConnected} className="flex-none whitespace-nowrap px-4 py-2.5 rounded-lg bg-black/30 border border-white/5 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-400 transition-all text-xs font-medium text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed">{cmd.label}</button>
-//                                     ))}
-//                                 </div>
-//                             )}
-//                         </div>
-
-//                         <div className="h-px bg-white/5 w-full"></div>
-
-//                         {/* Highlight - Vertical Layout */}
-//                         <div className="space-y-4">
-//                             <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><Highlighter size={12} /> Highlight</h3>
-//                             <div className="flex flex-col gap-3">
-//                                 <input type="text" value={highlightKeyword} onChange={(e) => setHighlightKeyword(e.target.value)} placeholder="Enter keyword to highlight..." className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-300 focus:outline-none focus:border-emerald-500/50 transition-all" />
-//                                 <div className="flex gap-2">
-//                                     {[
-//                                     {color: 'text-amber-400 bg-amber-400/10 border-amber-400/20', bg: 'bg-amber-400'},
-//                                     {color: 'text-rose-400 bg-rose-400/10 border-rose-400/20', bg: 'bg-rose-500'},
-//                                     {color: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20', bg: 'bg-emerald-500'},
-//                                     {color: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20', bg: 'bg-cyan-500'},
-//                                     {color: 'text-violet-400 bg-violet-400/10 border-violet-400/20', bg: 'bg-violet-500'},
-//                                     ].map((item, idx) => (
-//                                         <button key={idx} onClick={() => setHighlightColor(item.color)} className={`flex-1 h-8 rounded-lg ${item.bg} ${highlightColor === item.color ? 'ring-2 ring-white/20 scale-105 shadow-lg opacity-100' : 'opacity-20 hover:opacity-80'} transition-all`} />
-//                                     ))}
-//                                 </div>
-//                             </div>
-//                         </div>
-//                     </div>
-
-//                     {/* Transmitter - Fixed Bottom */}
-//                     <div className="flex-none p-6 border-t border-white/5 bg-black/40 z-30">
-//                         <div className="flex flex-col gap-4">
-//                         <div className="relative group">
-//                             <textarea 
-//                                 value={inputText}
-//                                 onChange={(e) => setInputText(e.target.value)}
-//                                 onKeyDown={handleInputKeyDown}
-//                                 placeholder="Input payload..."
-//                                 className="w-full h-32 bg-black/30 border border-white/10 rounded-xl p-4 text-sm font-mono text-zinc-300 focus:outline-none focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/10 resize-none placeholder-zinc-600 transition-all custom-scrollbar"
-//                             />
-//                             <div className="absolute bottom-3 right-3 flex gap-2">
-//                                 <button onClick={() => setUseHexSend(!useHexSend)} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-all text-[10px] font-mono tracking-wide ${useHexSend ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-white/5 border-white/5 text-zinc-500 hover:text-zinc-300'}`}>
-//                                     {useHexSend ? 'HEX' : 'ASCII'}
-//                                 </button>
-//                                 <div className="flex bg-white/5 border border-white/5 rounded-md overflow-hidden">
-//                                     {[
-//                                         { label: '\\n', val: '\\n' },
-//                                         { label: '\\r\\n', val: '\\r\\n' },
-//                                         { label: 'Ø', val: 'none' },
-//                                     ].map(opt => (
-//                                         <button key={opt.val} onClick={() => setLineEnding(opt.val)} className={`px-2 py-1 text-[10px] font-mono transition-all ${lineEnding === opt.val ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'}`}>{opt.label}</button>
-//                                     ))}
-//                                 </div>
-//                             </div>
-//                         </div>
-//                         <button onClick={() => sendData()} disabled={!isConnected} className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-600 text-white text-sm font-bold tracking-wide rounded-xl transition-all shadow-lg shadow-emerald-900/20 disabled:shadow-none flex items-center justify-center gap-2.5 group hover:scale-[1.01] active:scale-[0.99]">
-//                             <Send size={16} className="group-hover:translate-x-0.5 transition-transform" />
-//                             SEND PAYLOAD
-//                         </button>
-//                         </div>
-//                     </div>
-//                 </aside>
-//             </div>
-//         </div>
-//       </div>
-
-//       <style>{`
-//         .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
-//         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-//         .custom-scrollbar::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 5px; }
-//         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #52525b; }
-//         .custom-scrollbar::-webkit-scrollbar-corner { background: transparent; }
-//         @keyframes gradient { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
-//         .animate-gradient { animation: gradient 3s ease infinite; }
-//       `}</style>
-//     </div>
-//   );
-// }
-
-//---------------------------------------------------------------------------------
-
-// import React, { useState, useRef, useEffect } from 'react';
-// import { 
-//   Terminal, Settings, Download, Trash2, Play, Square, Highlighter, Send, 
-//   AlertCircle, Zap, Activity, Cpu, Command, Radio, Binary, Copy, Plus, X, 
-//   Pause, Edit2, Save, Plug, Search, Usb, Monitor, Unplug, Hash, Filter, 
-//   ChevronDown, Check, ArrowUp, ArrowDown, ShieldCheck, Languages
-// } from 'lucide-react';
-
-// export default function App() {
-//   // --- 状态定义 ---
-
-//   // 串口核心
-//   const [port, setPort] = useState(null);
-//   const [availablePorts, setAvailablePorts] = useState([]); 
-//   const [isConnected, setIsConnected] = useState(false);
-//   const readerRef = useRef(null);
-//   const writerRef = useRef(null);
-//   const closingRef = useRef(false); // 标记是否正在关闭
-  
-//   // 关键引用
-//   const baudRef = useRef(null); 
-//   const bufferRef = useRef('');
-  
-//   // 界面交互状态
-//   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
-//   const [isBaudDropdownOpen, setIsBaudDropdownOpen] = useState(false);
-//   const [portSearchQuery, setPortSearchQuery] = useState('');
-//   const [isPaused, setIsPaused] = useState(false);
-//   const isPausedRef = useRef(false);
-
-//   // 日志数据 (环形缓冲)
-//   const [logs, setLogs] = useState([]);
-//   const logsEndRef = useRef(null);
-//   const [autoScroll, setAutoScroll] = useState(true);
-//   const [viewMode, setViewMode] = useState('ascii'); // 'ascii' | 'hex'
-//   const [logFilter, setLogFilter] = useState('');
-//   const filterInputRef = useRef(null);
-
-//   // --- 持久化状态 (localStorage) - 增强版 ---
-//   const usePersistedState = (key, defaultValue) => {
-//     const [state, setState] = useState(() => {
-//       try {
-//         const item = localStorage.getItem(key);
-//         return item ? JSON.parse(item) : defaultValue;
-//       } catch (error) {
-//         console.warn(`Resetting state for ${key} due to parse error.`);
-//         return defaultValue;
-//       }
-//     });
-
-//     useEffect(() => {
-//       try {
-//         localStorage.setItem(key, JSON.stringify(state));
-//       } catch (e) { console.error(e); }
-//     }, [key, state]);
-
-//     return [state, setState];
-//   };
-
-//   const [baudRate, setBaudRate] = usePersistedState('sf_baud', 115200);
-//   const [encoding, setEncoding] = usePersistedState('sf_encoding', 'utf-8'); 
-//   const [highlightKeyword, setHighlightKeyword] = usePersistedState('sf_hl_kw', '');
-//   const [highlightColor, setHighlightColor] = usePersistedState('sf_hl_col', 'text-amber-400 bg-amber-400/10 border-amber-400/20');
-//   const [quickCommands, setQuickCommands] = usePersistedState('sf_cmds', [
-//     { id: 1, label: 'AT Test', cmd: 'AT' },
-//     { id: 2, label: 'Reset', cmd: 'AT+RST' },
-//     { id: 3, label: 'Version', cmd: 'AT+GMR' },
-//   ]);
-//   const [useHexSend, setUseHexSend] = usePersistedState('sf_hex_send', false);
-//   const [lineEnding, setLineEnding] = usePersistedState('sf_eol', '\\n'); 
-//   const [appendCRC, setAppendCRC] = usePersistedState('sf_crc', false);
-
-//   // 发送相关
-//   const [inputText, setInputText] = useState('');
-//   const [sendHistory, setSendHistory] = useState([]);
-//   const [historyIndex, setHistoryIndex] = useState(-1);
-//   const [isEditingCmds, setIsEditingCmds] = useState(false);
-//   const [copyFeedback, setCopyFeedback] = useState(null);
-  
-//   // 状态定义补充
-//   const [showTimestamp, setShowTimestamp] = useState(true);
-
-//   const isWebSerialSupported = 'serial' in navigator;
-
-//   // --- Effect Hooks ---
-
-//   useEffect(() => { document.title = "SerialFlux Pro"; }, []);
-//   useEffect(() => { isPausedRef.current = isPaused; }, [isPaused]);
-
-//   // 全局快捷键
-//   useEffect(() => {
-//     const handleGlobalKeyDown = (e) => {
-//       if (e.ctrlKey && e.key === 'l') { 
-//         e.preventDefault();
-//         setLogs([]);
-//       }
-//       if (e.ctrlKey && e.key === 'f') { 
-//         e.preventDefault();
-//         filterInputRef.current?.focus();
-//       }
-//     };
-//     window.addEventListener('keydown', handleGlobalKeyDown);
-//     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-//   }, []);
-
-//   // 点击外部关闭下拉
-//   useEffect(() => {
-//     const closeDropdown = (e) => {
-//       if (baudRef.current && !baudRef.current.contains(e.target)) setIsBaudDropdownOpen(false);
-//     };
-//     document.addEventListener('mousedown', closeDropdown);
-//     return () => document.removeEventListener('mousedown', closeDropdown);
-//   }, []);
-
-//   // 端口监听
-//   useEffect(() => {
-//     if (!isWebSerialSupported) return;
-//     const updatePorts = async () => {
-//       try { setAvailablePorts(await navigator.serial.getPorts()); } catch (e) { console.error(e); }
-//     };
-//     updatePorts();
-//     navigator.serial.addEventListener('connect', updatePorts);
-//     navigator.serial.addEventListener('disconnect', (e) => {
-//       updatePorts();
-//       if (port === e.target) disconnectPort();
-//     });
-//     return () => {}; 
-//   }, [port]);
-
-//   // 自动滚动
-//   useEffect(() => {
-//     if (autoScroll && !isPaused && logsEndRef.current && !logFilter) {
-//       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-//     }
-//   }, [logs, autoScroll, viewMode, isPaused, logFilter]);
-
-//   // --- 辅助工具函数 ---
-//   const calculateCRC16 = (buffer) => {
-//     let crc = 0xFFFF;
-//     for (let pos = 0; pos < buffer.length; pos++) {
-//       crc ^= buffer[pos];
-//       for (let i = 8; i !== 0; i--) {
-//         if ((crc & 0x0001) !== 0) {
-//           crc >>= 1;
-//           crc ^= 0xA001;
-//         } else {
-//           crc >>= 1;
-//         }
-//       }
-//     }
-//     return new Uint8Array([crc & 0xFF, (crc >> 8) & 0xFF]);
-//   };
-
-//   const parseHexString = (str) => {
-//     const cleanStr = str.replace(/[^0-9a-fA-F]/g, '');
-//     const byteArray = new Uint8Array(cleanStr.length / 2);
-//     for (let i = 0; i < cleanStr.length; i += 2) {
-//       byteArray[i / 2] = parseInt(cleanStr.substring(i, i + 2), 16);
-//     }
-//     return byteArray;
-//   };
-
-//   const bufferToHex = (buffer) => {
-//     return Array.from(new Uint8Array(buffer))
-//       .map(b => b.toString(16).padStart(2, '0').toUpperCase())
-//       .join(' ');
-//   };
-
-//   // --- 核心逻辑 ---
-
-//   const openPort = async (selectedPort) => {
-//     if (!selectedPort) return;
-//     if (port && isConnected) await disconnectPort();
-
-//     try {
-//       await selectedPort.open({ baudRate: parseInt(baudRate) || 115200 });
-//       setPort(selectedPort);
-//       setIsConnected(true);
-//       setIsPaused(false);
-//       setIsConnectModalOpen(false);
-//       closingRef.current = false;
-//       setAvailablePorts(await navigator.serial.getPorts());
-
-//       readLoop(selectedPort);
-      
-//     } catch (error) {
-//       console.error('Connection failed:', error);
-//       alert(`Connection failed: ${error.message}`);
-//     }
-//   };
-
-//   const readLoop = async (currentPort) => {
-//     if (!currentPort?.readable) return;
-    
-//     try {
-//         readerRef.current = currentPort.readable.getReader();
-//     } catch(e) {
-//         console.error("Failed to get reader", e);
-//         return;
-//     }
-
-//     try {
-//       while (true) {
-//         const { value, done } = await readerRef.current.read();
-//         if (done) {
-//           readerRef.current.releaseLock();
-//           break;
-//         }
-//         if (value && !closingRef.current) {
-//           processIncomingData(value);
-//         }
-//       }
-//     } catch (error) {
-//       if (!closingRef.current) console.error('Read error:', error);
-//     } finally {
-//         try { readerRef.current?.releaseLock(); } catch(e){}
-//     }
-//   };
-
-//   const processIncomingData = (uint8Chunk) => {
-//     if (isPausedRef.current) return;
-
-//     const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 });
-    
-//     let textContent = '';
-//     if (viewMode === 'hex') {
-//         textContent = bufferToHex(uint8Chunk);
-//     } else {
-//         try {
-//             const decoder = new TextDecoder(encoding); 
-//             textContent = decoder.decode(uint8Chunk, { stream: true });
-//         } catch (e) {
-//             textContent = `[Decode Error] ${bufferToHex(uint8Chunk)}`;
-//         }
-//     }
-
-//     setLogs(prev => {
-//         const newLog = {
-//             id: Date.now() + Math.random(),
-//             timestamp,
-//             text: textContent,
-//             raw: uint8Chunk,
-//             type: 'rx'
-//         };
-//         const newLogs = [...prev, newLog];
-//         if (newLogs.length > 1000) return newLogs.slice(-1000);
-//         return newLogs;
-//     });
-//   };
-
-//   const disconnectPort = async () => {
-//     closingRef.current = true;
-//     try {
-//       if (readerRef.current) {
-//         await readerRef.current.cancel(); 
-//         readerRef.current = null;
-//       }
-//       if (writerRef.current) {
-//         writerRef.current.releaseLock();
-//         writerRef.current = null;
-//       }
-//       if (port) {
-//         await port.close();
-//         setPort(null);
-//         setIsConnected(false);
-//       }
-//     } catch (error) {
-//       console.error('Disconnect error:', error);
-//       setPort(null);
-//       setIsConnected(false);
-//     }
-//   };
-
-//   const sendData = async (textToSend = null) => {
-//     const rawInput = textToSend !== null ? textToSend : inputText;
-//     if (!port || !port.writable || !rawInput) return;
-
-//     if (textToSend === null && rawInput.trim() !== '') {
-//         setSendHistory(prev => [rawInput, ...prev].slice(0, 50));
-//         setHistoryIndex(-1);
-//     }
-
-//     try {
-//         const writer = port.writable.getWriter();
-//         writerRef.current = writer;
-
-//         let dataToSend;
-//         let logDisplay;
-
-//         if (useHexSend) {
-//             const rawBytes = parseHexString(rawInput);
-//             if (appendCRC) {
-//                 const crc = calculateCRC16(rawBytes);
-//                 const merged = new Uint8Array(rawBytes.length + 2);
-//                 merged.set(rawBytes);
-//                 merged.set(crc, rawBytes.length);
-//                 dataToSend = merged;
-//             } else {
-//                 dataToSend = rawBytes;
-//             }
-//             logDisplay = bufferToHex(dataToSend);
-
-//         } else {
-//             let str = rawInput;
-//             if (lineEnding === '\\n') str += '\n';
-//             else if (lineEnding === '\\r') str += '\r';
-//             else if (lineEnding === '\\r\\n') str += '\r\n';
-
-//             const encoder = new TextEncoder(); 
-//             let rawBytes = encoder.encode(str);
-            
-//             if (appendCRC) {
-//                  const crc = calculateCRC16(rawBytes);
-//                  const merged = new Uint8Array(rawBytes.length + 2);
-//                  merged.set(rawBytes);
-//                  merged.set(crc, rawBytes.length);
-//                  dataToSend = merged;
-//                  logDisplay = `${str} [CRC]`;
-//             } else {
-//                  dataToSend = rawBytes;
-//                  logDisplay = str.replace(/\r/g, 'CR').replace(/\n/g, 'LF');
-//             }
-//         }
-
-//         await writer.write(dataToSend);
-//         writer.releaseLock();
-//         writerRef.current = null;
-
-//         setLogs(prev => {
-//             const newLog = {
-//                 id: Date.now() + Math.random(),
-//                 timestamp: new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 }),
-//                 text: logDisplay,
-//                 type: 'tx'
-//             };
-//             const newLogs = [...prev, newLog];
-//             if (newLogs.length > 1000) return newLogs.slice(-1000);
-//             return newLogs;
-//         });
-
-//         if (textToSend === null) setInputText('');
-
-//     } catch (error) {
-//         console.error('Send failed:', error);
-//         if (writerRef.current) writerRef.current.releaseLock();
-//     }
-//   };
-
-//   // --- 辅助功能 ---
-
-//   const handleInputKeyDown = (e) => {
-//     if (e.key === 'Enter') {
-//         if (e.ctrlKey) sendData();
-//     } else if (e.key === 'ArrowUp') {
-//         e.preventDefault();
-//         if (sendHistory.length > 0) {
-//             const nextIndex = Math.min(historyIndex + 1, sendHistory.length - 1);
-//             setHistoryIndex(nextIndex);
-//             setInputText(sendHistory[nextIndex]);
-//         }
-//     } else if (e.key === 'ArrowDown') {
-//         e.preventDefault();
-//         if (historyIndex > 0) {
-//             const nextIndex = historyIndex - 1;
-//             setHistoryIndex(nextIndex);
-//             setInputText(sendHistory[nextIndex]);
-//         } else if (historyIndex === 0) {
-//             setHistoryIndex(-1);
-//             setInputText(''); 
-//         }
-//     }
-//   };
-
-//   const copyToClipboard = (text) => {
-//     navigator.clipboard.writeText(text);
-//     setCopyFeedback(text.substring(0, 20) + '...');
-//     setTimeout(() => setCopyFeedback(null), 1500);
-//   };
-
-//   const exportData = () => {
-//     const content = logs.map(l => `[${l.timestamp}] ${l.type === 'tx' ? 'TX' : 'RX'}: ${l.text}`).join('\n');
-//     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-//     const url = URL.createObjectURL(blob);
-//     const link = document.createElement('a');
-//     link.href = url;
-//     link.download = `serial_log_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.txt`;
-//     document.body.appendChild(link);
-//     link.click();
-//     document.body.removeChild(link);
-//   };
-
-//   const renderLogContent = (text) => {
-//     // 强制转换为字符串，防止对象渲染错误
-//     const safeText = String(text);
-    
-//     if (viewMode === 'hex') return safeText; 
-//     if (!highlightKeyword) return safeText;
-    
-//     const parts = safeText.split(new RegExp(`(${highlightKeyword})`, 'gi'));
-//     return (
-//       <span>
-//         {parts.map((part, i) => 
-//           part.toLowerCase() === highlightKeyword.toLowerCase() ? (
-//             <span key={i} className={`${highlightColor} font-bold px-1 rounded border border-current shadow-sm`}>{part}</span>
-//           ) : (part)
-//         )}
-//       </span>
-//     );
-//   };
-
-//   // 格式化相关
-//   const getPortInfo = (port, index) => {
-//     const info = port.getInfo();
-//     if (info.usbVendorId && info.usbProductId) {
-//       return { name: `USB Device`, meta: `${info.usbVendorId.toString(16).padStart(4,'0')}:${info.usbProductId.toString(16).padStart(4,'0')}` };
-//     }
-//     return { name: `Serial Port ${index + 1}`, meta: 'Generic' };
-//   };
-
-//   // *** 修复点：添加 filteredPorts 定义 ***
-//   const filteredPorts = availablePorts.filter((p, index) => {
-//     if (!portSearchQuery) return true;
-//     const info = getPortInfo(p, index);
-//     const searchLower = portSearchQuery.toLowerCase();
-//     return info.name.toLowerCase().includes(searchLower) || info.meta.toLowerCase().includes(searchLower);
-//   });
-
-//   const filteredLogs = logs.filter(log => {
-//       if(!logFilter) return true;
-//       return String(log.text).toLowerCase().includes(logFilter.toLowerCase());
-//   });
-
-//   const forgetPort = async (e, portToForget) => {
-//     e.stopPropagation();
-//     try {
-//         if (portToForget === port && isConnected) await disconnectPort();
-//         await portToForget.forget();
-//         setAvailablePorts(await navigator.serial.getPorts());
-//     } catch (error) {
-//         alert('Could not forget port. Require Chrome 103+.');
-//     }
-//   };
-
-//   const requestNewPort = async () => {
-//     try {
-//       const selectedPort = await navigator.serial.requestPort();
-//       openPort(selectedPort);
-//     } catch (error) { console.log('User cancelled'); }
-//   };
-
-//   const updateQuickCommand = (id, field, value) => {
-//     setQuickCommands(prev => prev.map(cmd => cmd.id === id ? { ...cmd, [field]: value } : cmd));
-//   };
-//   const addQuickCommand = () => {
-//     const newId = Math.max(0, ...quickCommands.map(c => c.id)) + 1;
-//     setQuickCommands([...quickCommands, { id: newId, label: 'Cmd', cmd: '' }]);
-//   };
-//   const deleteQuickCommand = (id) => {
-//     setQuickCommands(prev => prev.filter(c => c.id !== id));
-//   };
-
-//   const COMMON_BAUD_RATES = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 74880, 115200, 230400, 460800, 921600, 1000000, 2000000];
-
-//   return (
-//     <div className="flex h-screen w-full items-center justify-center bg-[#050505] text-zinc-300 font-sans selection:bg-emerald-500/30 selection:text-emerald-200 overflow-hidden relative">
-      
-//       {/* 桌面背景 */}
-//       <div className="absolute inset-0 pointer-events-none z-0">
-//          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-emerald-900/20 via-zinc-950/80 to-zinc-950"></div>
-//          <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}></div>
-//          <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-//       </div>
-
-//       {/* 窗口容器 (Window Mode) */}
-//       <div className="relative w-[95vw] h-[90vh] max-w-[1280px] max-h-[850px] flex flex-col animate-in fade-in zoom-in-95 duration-500 shadow-[0_0_60px_-15px_rgba(0,0,0,0.8)]">
-        
-//         {/* 外壳边框 */}
-//         <div className="absolute inset-0 rounded-2xl border border-white/5 bg-zinc-900/95 backdrop-blur-3xl z-0 box-border pointer-events-none ring-1 ring-white/5">
-//             <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-//         </div>
-
-//         {/* 螺丝装饰 */}
-//         <div className="absolute top-3 left-3 w-2 h-2 rounded-full bg-black/60 border border-white/5 z-20 pointer-events-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)] opacity-40"></div>
-//         <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-black/60 border border-white/5 z-20 pointer-events-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)] opacity-40"></div>
-//         <div className="absolute bottom-3 left-3 w-2 h-2 rounded-full bg-black/60 border border-white/5 z-20 pointer-events-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)] opacity-40"></div>
-//         <div className="absolute bottom-3 right-3 w-2 h-2 rounded-full bg-black/60 border border-white/5 z-20 pointer-events-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)] opacity-40"></div>
-
-//         {/* 内容 */}
-//         <div className="relative z-10 flex flex-col w-full h-full rounded-2xl overflow-hidden bg-transparent">
-            
-//             {/* Title Bar */}
-//             <div className="h-10 bg-black/20 border-b border-white/5 flex items-center justify-between px-6 select-none flex-none z-50 backdrop-blur-sm">
-//                 <div className="flex gap-2 group">
-//                     <div className="w-3 h-3 rounded-full bg-[#FF5F56] border border-black/20 shadow-inner"></div>
-//                     <div className="w-3 h-3 rounded-full bg-[#FFBD2E] border border-black/20 shadow-inner"></div>
-//                     <div className="w-3 h-3 rounded-full bg-[#27C93F] border border-black/20 shadow-inner"></div>
-//                 </div>
-//                 <div className="text-xs font-bold text-zinc-500 tracking-widest uppercase flex items-center gap-2 opacity-80">
-//                     <Command size={12} className="text-emerald-500" />
-//                     SERIAL FLUX PRO <span className="text-[9px] px-1 bg-white/5 rounded text-zinc-600 font-mono">V1.0</span>
-//                 </div>
-//                 <div className="w-14"></div> 
-//             </div>
-
-//             {/* Main + Sidebar */}
-//             <div className="flex-1 flex overflow-hidden relative">
-                
-//                 {/* Copy Feedback */}
-//                 {copyFeedback && (
-//                     <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-900 border border-emerald-500/20 text-emerald-400 px-4 py-2 rounded-full shadow-2xl text-xs font-medium animate-in fade-in slide-in-from-top-2 pointer-events-none flex items-center gap-2">
-//                     <Copy size={14} />
-//                     {copyFeedback}
-//                     </div>
-//                 )}
-
-//                 {/* Connect Modal */}
-//                 {isConnectModalOpen && (
-//                     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-[2px] animate-in fade-in duration-200">
-//                         <div className="relative w-[500px] bg-[#0c0c0e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80%] ring-1 ring-white/10">
-//                             <div className="p-6 border-b border-white/5 flex items-center justify-between bg-zinc-900/50">
-//                                 <div className="flex items-center gap-4">
-//                                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 flex items-center justify-center ring-1 ring-white/5 shadow-inner">
-//                                         <Plug size={20} className="text-emerald-400" />
-//                                     </div>
-//                                     <div>
-//                                         <h3 className="text-base font-bold text-zinc-100 tracking-tight">Device Manager</h3>
-//                                         <p className="text-xs text-zinc-500 mt-0.5 font-medium">Select a serial port to connect</p>
-//                                     </div>
-//                                 </div>
-//                                 <button onClick={() => setIsConnectModalOpen(false)} className="p-2 hover:bg-white/10 rounded-lg text-zinc-500 hover:text-white transition-colors"><X size={18} /></button>
-//                             </div>
-                            
-//                             {/* Search */}
-//                             {availablePorts.length > 0 && (
-//                                 <div className="px-6 py-4 border-b border-white/5 bg-zinc-900/30">
-//                                     <div className="relative group/search">
-//                                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within/search:text-emerald-400 transition-colors" />
-//                                     <input type="text" placeholder="Filter devices..." value={portSearchQuery} onChange={(e) => setPortSearchQuery(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-lg pl-9 pr-4 py-2.5 text-xs text-zinc-300 focus:outline-none focus:border-emerald-500/30 focus:ring-1 focus:ring-emerald-500/10 placeholder-zinc-600 transition-all" />
-//                                     </div>
-//                                 </div>
-//                             )}
-
-//                             {/* List */}
-//                             <div className="p-4 overflow-y-auto custom-scrollbar flex flex-col gap-2 min-h-[200px] bg-black/20">
-//                                 {availablePorts.length === 0 ? (
-//                                     <div className="flex-1 flex flex-col items-center justify-center text-zinc-600 py-10">
-//                                         <div className="w-12 h-12 rounded-full bg-zinc-900/80 flex items-center justify-center mb-4 shadow-lg ring-1 ring-white/5"><Usb size={20} className="opacity-30" /></div>
-//                                         <p className="text-sm font-medium text-zinc-400">No devices found</p>
-//                                         <p className="text-xs opacity-50 mt-1">Browser security requires manual authorization.</p>
-//                                     </div>
-//                                 ) : (
-//                                     filteredPorts.map((p, index) => {
-//                                         const info = getPortInfo(p, index);
-//                                         const isCurrent = port === p && isConnected;
-//                                         return (
-//                                         <div key={index} onClick={() => openPort(p)} className={`w-full text-left p-3.5 rounded-xl border transition-all group/item relative overflow-hidden cursor-pointer flex items-center justify-between ${isCurrent ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-zinc-900/60 border-white/5 hover:border-emerald-500/20 hover:bg-zinc-800'}`}>
-//                                             <div className="flex items-center gap-4 relative z-10">
-//                                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center border transition-colors ${isCurrent ? 'bg-emerald-500 text-black border-emerald-400' : 'bg-black/50 border-white/5 text-zinc-600 group-hover/item:text-emerald-400 group-hover/item:border-emerald-500/20'}`}><Usb size={18} /></div>
-//                                                 <div>
-//                                                     <div className={`text-sm font-semibold transition-colors ${isCurrent ? 'text-emerald-400' : 'text-zinc-300 group-hover/item:text-white'}`}>{info.name}</div>
-//                                                     <div className="text-[10px] font-mono text-zinc-600 group-hover/item:text-zinc-500 flex items-center gap-2 mt-0.5"><span>{info.meta}</span></div>
-//                                                 </div>
-//                                             </div>
-//                                             <button onClick={(e) => forgetPort(e, p)} className="p-2 rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 opacity-0 group-hover/item:opacity-100 transition-all z-20" title="Forget Device"><Trash2 size={14} /></button>
-//                                         </div>
-//                                         );
-//                                     })
-//                                 )}
-//                             </div>
-
-//                             <div className="p-5 border-t border-white/5 bg-zinc-900/50">
-//                                 <button onClick={requestNewPort} className="relative w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold tracking-widest transition-all shadow-lg shadow-emerald-900/20 hover:shadow-emerald-500/30 flex items-center justify-center gap-3 group/btn overflow-hidden">
-//                                     <Search size={16} strokeWidth={2.5} className="relative z-10" /><span className="relative z-10">SCAN FOR NEW DEVICES</span>
-//                                 </button>
-//                             </div>
-//                         </div>
-//                     </div>
-//                 )}
-
-//                 {/* Left Panel */}
-//                 <main className="flex-1 flex flex-col min-w-0 bg-transparent relative">
-//                     {/* Top Toolbar */}
-//                     <div className="absolute top-4 left-6 right-6 z-20 flex items-center justify-between">
-//                         <div className={`flex items-center gap-3 px-3 py-2 pr-5 rounded-full border backdrop-blur-md transition-all duration-500 ${isConnected ? 'bg-emerald-950/40 border-emerald-500/30 shadow-[0_0_20px_-5px_rgba(16,185,129,0.3)]' : 'bg-black/40 border-white/10'}`}>
-//                         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isConnected ? 'bg-emerald-500 text-black' : 'bg-zinc-800 text-zinc-500'}`}>{isConnected ? <Activity size={14} className="animate-pulse" /> : <Zap size={14} />}</div>
-//                         <div className="flex flex-col">
-//                             <span className={`text-xs font-bold tracking-wider uppercase ${isConnected ? 'text-emerald-400' : 'text-zinc-500'}`}>{isConnected ? 'Connected' : 'Offline'}</span>
-//                             {isConnected && <span className="text-[9px] text-zinc-500 leading-none">{String(baudRate)} bps</span>}
-//                         </div>
-//                         </div>
-
-//                         <div className="flex items-center gap-3">
-//                             <div className="relative group/search">
-//                                 <div className={`absolute inset-y-0 left-3 flex items-center pointer-events-none transition-colors ${logFilter ? 'text-emerald-400' : 'text-zinc-500'}`}><Filter size={14} /></div>
-//                                 <input ref={filterInputRef} type="text" value={logFilter} onChange={(e) => setLogFilter(e.target.value)} placeholder="Search logs..." className={`h-11 pl-9 pr-4 rounded-full border text-xs bg-black/40 backdrop-blur-md transition-all outline-none w-32 focus:w-48 ${logFilter ? 'border-emerald-500/50 text-emerald-300' : 'border-white/10 text-zinc-300 focus:border-white/20'}`} />
-//                                 {logFilter && <button onClick={() => setLogFilter('')} className="absolute inset-y-0 right-2 flex items-center text-zinc-500 hover:text-white"><X size={12} /></button>}
-//                             </div>
-
-//                             <div className="flex items-center p-1.5 rounded-full bg-black/40 border border-white/10 backdrop-blur-md shadow-xl gap-1">
-//                                 <div className="flex bg-white/5 rounded-full p-0.5 border border-white/5">
-//                                     <button onClick={() => setViewMode('ascii')} className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${viewMode === 'ascii' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>ASC</button>
-//                                     <button onClick={() => setViewMode('hex')} className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${viewMode === 'hex' ? 'bg-emerald-600/20 text-emerald-400 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>HEX</button>
-//                                 </div>
-//                                 <div className="w-px h-4 bg-white/10 mx-1"></div>
-//                                 {isConnected && (
-//                                     <button onClick={() => setIsPaused(!isPaused)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isPaused ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'text-zinc-400 hover:bg-white/10 hover:text-white'}`} title={isPaused ? "Resume View" : "Pause View"}>{isPaused ? <Play size={14} fill="currentColor" /> : <Pause size={14} fill="currentColor" />}</button>
-//                                 )}
-//                                 <button onClick={exportData} disabled={logs.length === 0} className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:bg-white/10 hover:text-emerald-400 transition-all disabled:opacity-30" title="Export Log"><Download size={14} strokeWidth={2} /></button>
-//                                 <button onClick={() => setLogs([])} className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:bg-rose-500/20 hover:text-rose-400 transition-all" title="Clear Console"><Trash2 size={14} strokeWidth={2} /></button>
-//                             </div>
-//                         </div>
-//                     </div>
-
-//                     {/* Terminal */}
-//                     <div className="flex-1 pt-24 pb-8 px-8 overflow-y-auto custom-scrollbar font-mono text-sm leading-relaxed relative">
-//                         {isPaused && <div className="fixed top-36 right-[420px] px-3 py-1 bg-amber-500/90 text-black text-[10px] font-bold rounded-md shadow-lg z-30 pointer-events-none uppercase tracking-wider backdrop-blur-md">View Paused</div>}
-//                         {logs.length === 0 ? (
-//                             <div className="h-full flex flex-col items-center justify-center opacity-20 select-none">
-//                                 <Terminal size={64} className="text-emerald-400 mb-4" strokeWidth={1} />
-//                                 <p className="text-zinc-500 font-light tracking-wide text-base">READY TO CONNECT</p>
-//                             </div>
-//                         ) : (
-//                             <div className="space-y-0.5">
-//                                 {filteredLogs.map((log) => (
-//                                     <div key={log.id} onClick={() => copyToClipboard(log.text)} className="flex gap-4 hover:bg-white/[0.04] -mx-4 px-4 py-0.5 rounded transition-colors group cursor-pointer relative" title="Click to copy line">
-//                                         {showTimestamp && <span className="text-zinc-600 shrink-0 select-none text-[11px] pt-[3px] font-medium font-sans">{log.timestamp}</span>}
-//                                         <div className={`tracking-tight whitespace-pre-wrap break-all flex-1 ${log.type === 'tx' ? 'text-indigo-300/80' : 'text-emerald-400'}`}>{log.type === 'tx' && <span className="text-indigo-500 mr-2 text-[10px] align-middle inline-block font-bold select-none">TX</span>}{renderLogContent(log.text)}</div>
-//                                     </div>
-//                                 ))}
-//                                 {filteredLogs.length === 0 && logFilter && <div className="text-zinc-500 text-xs text-center py-10">No matching logs found for "{logFilter}"</div>}
-//                                 <div ref={logsEndRef} />
-//                             </div>
-//                         )}
-//                     </div>
-
-//                     {/* Footer Status - With RX/TX Lights */}
-//                     <div className="h-10 flex items-center justify-between px-8 text-xs text-zinc-500 select-none border-t border-white/[0.05] bg-black/20">
-//                         <div className="flex items-center gap-6 font-medium">
-//                             <span className="flex items-center gap-2">
-//                                 <span className={`w-2 h-2 rounded-full transition-all duration-100 ${logs.length > 0 && logs[logs.length-1].type === 'rx' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-emerald-500/20'}`}></span>
-//                                 RX: {logs.filter(l => l.type === 'rx').length}
-//                             </span>
-//                             <span className="flex items-center gap-2">
-//                                 <span className={`w-2 h-2 rounded-full transition-all duration-100 ${logs.length > 0 && logs[logs.length-1].type === 'tx' ? 'bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.8)]' : 'bg-indigo-500/20'}`}></span>
-//                                 TX: {logs.filter(l => l.type === 'tx').length}
-//                             </span>
-//                         </div>
-//                         <label className="flex items-center gap-2 cursor-pointer hover:text-zinc-300 transition-colors group">
-//                             <div className={`w-2 h-2 rounded-full transition-colors ${autoScroll && !isPaused ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-zinc-700'}`}></div>
-//                             <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} className="hidden" />
-//                             AUTO-SCROLL
-//                         </label>
-//                     </div>
-//                 </main>
-
-//                 {/* Right Sidebar */}
-//                 <aside className="w-96 bg-black/20 backdrop-blur-xl border-l border-white/[0.06] flex flex-col z-20">
-//                     <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-//                         {/* Connection */}
-//                         <div className="space-y-4">
-//                             <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><Plug size={12} /> Connection</h3>
-//                             <div className="flex justify-between items-center mb-2">
-//                                 {/* Encoding Toggle */}
-//                                 <button onClick={() => setEncoding(encoding === 'utf-8' ? 'gbk' : 'utf-8')} className="text-[10px] px-2 py-0.5 rounded bg-black/40 border border-white/10 text-zinc-400 hover:text-white transition-colors flex items-center gap-1" title="Toggle Encoding">
-//                                     <Languages size={10} /> {encoding.toUpperCase()}
-//                                 </button>
-//                             </div>
-//                             <div className="relative w-full" ref={baudRef}>
-//                                 <div className="relative flex items-center group">
-//                                     <input type="text" inputMode="numeric" pattern="[0-9]*" value={baudRate} onChange={(e) => { if (/^\d*$/.test(e.target.value)) setBaudRate(e.target.value); }} disabled={isConnected} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-300 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-all disabled:opacity-50 font-mono pr-10" placeholder="Custom Baud..." />
-//                                     <button onClick={() => !isConnected && setIsBaudDropdownOpen(!isBaudDropdownOpen)} disabled={isConnected} className="absolute right-3 p-1 rounded hover:bg-white/5 text-zinc-500 hover:text-emerald-400 disabled:opacity-50 transition-colors"><ChevronDown size={16} className={`transition-transform ${isBaudDropdownOpen ? 'rotate-180' : ''}`} /></button>
-//                                 </div>
-//                                 {isBaudDropdownOpen && (
-//                                     <div className="absolute top-full left-0 right-0 mt-2 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 max-h-56 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-100">
-//                                         {COMMON_BAUD_RATES.map(rate => (
-//                                             <button key={rate} onClick={() => { setBaudRate(rate); setIsBaudDropdownOpen(false); }} className={`w-full text-left px-5 py-2.5 text-xs font-mono hover:bg-emerald-500/10 hover:text-emerald-400 transition-colors flex items-center justify-between border-b border-white/[0.02] last:border-none ${parseInt(baudRate) === rate ? 'text-emerald-400 bg-emerald-500/5' : 'text-zinc-400'}`}><span>{rate}</span>{parseInt(baudRate) === rate && <Check size={14} />}</button>
-//                                         ))}
-//                                     </div>
-//                                 )}
-//                             </div>
-//                             <button onClick={isConnected ? disconnectPort : () => setIsConnectModalOpen(true)} className={`w-full py-4 rounded-xl font-bold text-sm tracking-wide transition-all duration-300 flex items-center justify-center gap-2 shadow-lg ${isConnected ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 hover:shadow-rose-500/10' : 'bg-emerald-600 text-white hover:bg-emerald-500 border border-transparent hover:shadow-emerald-500/30'}`}>{isConnected ? 'DISCONNECT' : 'CONNECT DEVICE'}</button>
-//                         </div>
-//                         <div className="h-px bg-white/5 w-full"></div>
-//                         {/* Quick Actions */}
-//                         <div className="space-y-4">
-//                             <div className="flex items-center justify-between">
-//                                 <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><Zap size={12} /> Quick Actions</h3>
-//                                 <button onClick={() => setIsEditingCmds(!isEditingCmds)} className={`p-1.5 rounded-lg transition-colors ${isEditingCmds ? 'bg-emerald-500 text-black' : 'hover:bg-white/10 text-zinc-600 hover:text-zinc-300'}`}>{isEditingCmds ? <Save size={12} /> : <Edit2 size={12} />}</button>
-//                             </div>
-//                             {isEditingCmds ? (
-//                                 <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200">
-//                                     {quickCommands.map((cmd) => (
-//                                         <div key={cmd.id} className="flex gap-2">
-//                                         <input type="text" value={cmd.label} onChange={(e) => { const n = [...quickCommands]; n.find(c=>c.id===cmd.id).label = e.target.value; setQuickCommands(n); }} className="w-1/3 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-300 focus:border-emerald-500/50 focus:outline-none" />
-//                                         <input type="text" value={cmd.cmd} onChange={(e) => { const n = [...quickCommands]; n.find(c=>c.id===cmd.id).cmd = e.target.value; setQuickCommands(n); }} className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-emerald-400/80 focus:border-emerald-500/50 focus:outline-none" />
-//                                         <button onClick={() => setQuickCommands(prev => prev.filter(c => c.id !== cmd.id))} className="p-2 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20"><Trash2 size={14} /></button>
-//                                         </div>
-//                                     ))}
-//                                     <button onClick={() => setQuickCommands([...quickCommands, { id: Date.now(), label: 'Cmd', cmd: '' }])} className="w-full py-2.5 border border-dashed border-white/10 rounded-lg text-xs text-zinc-500 hover:text-emerald-400 transition-colors"><Plus size={14} className="inline mr-1"/> Add</button>
-//                                 </div>
-//                             ) : (
-//                                 <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar -mx-1 px-1">
-//                                     {quickCommands.map((cmd) => (
-//                                         <button key={cmd.id} onClick={() => sendData(cmd.cmd)} disabled={!isConnected} className="flex-none whitespace-nowrap px-4 py-2.5 rounded-lg bg-black/30 border border-white/5 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-400 transition-all text-xs font-medium text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed">{cmd.label}</button>
-//                                     ))}
-//                                 </div>
-//                             )}
-//                         </div>
-//                         <div className="h-px bg-white/5 w-full"></div>
-//                         {/* Highlight */}
-//                         <div className="space-y-4">
-//                             <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><Highlighter size={12} /> Highlight</h3>
-//                             <div className="flex flex-col gap-3">
-//                                 <input type="text" value={highlightKeyword} onChange={(e) => setHighlightKeyword(e.target.value)} placeholder="Enter keyword..." className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-300 focus:outline-none focus:border-emerald-500/50 transition-all" />
-//                                 <div className="flex gap-2">
-//                                     {['text-amber-400 bg-amber-400/10 border-amber-400/20', 'text-rose-400 bg-rose-400/10 border-rose-400/20', 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20', 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20', 'text-violet-400 bg-violet-400/10 border-violet-400/20'].map((colorClass, idx) => (
-//                                         <button key={idx} onClick={() => setHighlightColor(colorClass)} className={`flex-1 h-8 rounded-lg ${colorClass.split(' ')[1]} ${highlightColor === colorClass ? 'ring-2 ring-white/20 scale-105 shadow-lg opacity-100' : 'opacity-20 hover:opacity-80'} transition-all`} />
-//                                     ))}
-//                                 </div>
-//                             </div>
-//                         </div>
-//                     </div>
-//                     {/* Transmitter */}
-//                     <div className="flex-none p-6 border-t border-white/5 bg-black/40 z-30">
-//                         <div className="flex flex-col gap-4">
-//                         <div className="relative group">
-//                             <textarea 
-//                                 value={inputText}
-//                                 onChange={(e) => setInputText(e.target.value)}
-//                                 onKeyDown={handleInputKeyDown}
-//                                 placeholder="Input payload..."
-//                                 className="w-full h-32 bg-black/40 border border-white/10 rounded-xl p-4 text-sm font-mono text-zinc-300 focus:outline-none focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/10 resize-none placeholder-zinc-600 transition-all custom-scrollbar"
-//                             />
-//                             <div className="absolute bottom-3 right-3 flex gap-2">
-//                                 <button onClick={() => setAppendCRC(!appendCRC)} className={`flex items-center gap-1 px-2 py-1 rounded-md border transition-all text-[10px] font-mono tracking-wide ${appendCRC ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-white/5 border-white/5 text-zinc-500 hover:text-zinc-300'}`} title="Append CRC16-Modbus"><ShieldCheck size={10} /> CRC</button>
-//                                 <button onClick={() => setUseHexSend(!useHexSend)} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-all text-[10px] font-mono tracking-wide ${useHexSend ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-white/5 border-white/5 text-zinc-500 hover:text-zinc-300'}`}>{useHexSend ? 'HEX' : 'ASCII'}</button>
-//                                 <div className="flex bg-white/5 border border-white/5 rounded-md overflow-hidden">
-//                                     {[{ label: '\\n', val: '\\n' }, { label: '\\r\\n', val: '\\r\\n' }, { label: 'Ø', val: 'none' }].map(opt => (
-//                                         <button key={opt.val} onClick={() => setLineEnding(opt.val)} className={`px-2 py-1 text-[10px] font-mono transition-all ${lineEnding === opt.val ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'}`}>{opt.label}</button>
-//                                     ))}
-//                                 </div>
-//                             </div>
-//                         </div>
-//                         <button onClick={() => sendData()} disabled={!isConnected} className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-600 text-white text-sm font-bold tracking-wide rounded-xl transition-all shadow-lg shadow-emerald-900/20 disabled:shadow-none flex items-center justify-center gap-2.5 group hover:scale-[1.01] active:scale-[0.99]"><Send size={16} className="group-hover:translate-x-0.5 transition-transform" /> SEND PAYLOAD</button>
-//                         </div>
-//                     </div>
-//                 </aside>
-//             </div>
-//         </div>
-//       </div>
-
-//       <style>{`
-//         .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
-//         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-//         .custom-scrollbar::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 5px; }
-//         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #52525b; }
-//         .custom-scrollbar::-webkit-scrollbar-corner { background: transparent; }
-//         @keyframes gradient { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
-//         .animate-gradient { animation: gradient 3s ease infinite; }
-//       `}</style>
-//     </div>
-//   );
-// }
-
-
-
-
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Terminal, Download, Trash2, Play, Highlighter, Send,
-  Zap, Activity, Command, Copy, Plus, X,
-  Pause, Edit2, Save, Plug, Search, Usb, Filter,
-  ChevronDown, Check, ShieldCheck, List, Monitor,
-  ChevronRight
+  Terminal, Trash2, Play, Send,
+  Activity, X, Pause, Edit2, Save, Plug, Usb, Filter,
+  ChevronDown, Timer, Moon, Sun, Cpu, MoreHorizontal,
+  BookmarkPlus, AlertCircle, ShieldAlert, List, ArrowUp, Trash, Check,
+  LineChart, Settings2, Menu, Download, Maximize2, Minimize2, Eye, EyeOff, Zap,
+  Camera, Image as ImageIcon, FileText, FileDown, ExternalLink
 } from 'lucide-react';
 
 // --- Utility: CRC16 Modbus Calculation ---
@@ -3091,168 +42,531 @@ const bufferToHex = (buffer) => {
     .join(' ');
 };
 
+// --- Component: Multi-Series Waveform Chart ---
+const SERIES_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ec4899']; 
+
+const WaveformChart = ({ dataHistory, seriesConfig, refLine = 0 }) => {
+    const [hoverIndex, setHoverIndex] = useState(null);
+    const chartAreaRef = useRef(null);
+
+    // Safety check for dataHistory
+    if (!Array.isArray(dataHistory) || dataHistory.length < 2) return (
+        <div className="flex flex-col items-center justify-center h-full opacity-30 select-none relative z-10">
+            <Activity size={32} strokeWidth={1} />
+            <span className="mt-2 text-[10px] uppercase tracking-widest font-bold">No Signal</span>
+            <span className="text-[9px] text-center max-w-[200px] mt-1">
+                Configure keywords or send numbers like "25.5, 60"
+            </span>
+        </div>
+    );
+
+    // Calculate Min/Max for scaling
+    let allValues = [];
+    dataHistory.forEach(point => {
+        if (point && Array.isArray(point.values)) {
+            point.values.forEach((val, idx) => {
+                if (seriesConfig[idx]?.visible && val !== null && val !== undefined && !isNaN(val)) {
+                    allValues.push(val);
+                }
+            });
+        }
+    });
+    
+    if (refLine > 0) allValues.push(refLine * 1.1); 
+    
+    const maxVal = allValues.length ? Math.max(...allValues) : 100;
+    const minVal = allValues.length ? Math.min(...allValues) : 0;
+    const range = maxVal - minVal || 1;
+
+    // Helper to generate SVG points
+    const getPoints = (seriesIndex) => {
+        return dataHistory.map((point, i) => {
+            const val = point.values ? point.values[seriesIndex] : null;
+            const safeVal = (val !== undefined && val !== null && !isNaN(val)) ? val : minVal;
+            const x = (i / (dataHistory.length - 1)) * 100;
+            const y = 100 - ((safeVal - minVal) / range) * 100;
+            return `${x},${y}`;
+        }).join(' ');
+    };
+
+    const refY = 100 - ((refLine - minVal) / range) * 100;
+
+    // Interaction Handlers - NOW BOUND TO THE INNER CHART AREA
+    const handleMouseMove = (e) => {
+        if (!chartAreaRef.current) return;
+        const rect = chartAreaRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const width = rect.width;
+        
+        // Map pixel x to data index (0 to length-1)
+        const idx = Math.min(Math.max(0, Math.round((x / width) * (dataHistory.length - 1))), dataHistory.length - 1);
+        setHoverIndex(idx);
+    };
+
+    const handleMouseLeave = () => {
+        setHoverIndex(null);
+    };
+
+    // Calculate hover data
+    const hoverData = hoverIndex !== null ? dataHistory[hoverIndex] : null;
+    const hoverXPct = hoverIndex !== null ? (hoverIndex / (dataHistory.length - 1)) * 100 : 0;
+
+    return (
+        <div className="relative w-full h-full select-none bg-black/5 dark:bg-black/20 rounded-lg">
+            {/* 1. Axis Labels (Outside the drawing area) */}
+            <div className="absolute inset-y-2 left-1 w-7 flex flex-col justify-between text-[9px] opacity-60 font-mono pointer-events-none z-10 text-right pr-1" style={{ color: 'currentColor' }}>
+                <span>{maxVal.toFixed(0)}</span>
+                <span>{(minVal + range * 0.75).toFixed(0)}</span>
+                <span>{(minVal + range * 0.5).toFixed(0)}</span>
+                <span>{(minVal + range * 0.25).toFixed(0)}</span>
+                <span>{minVal.toFixed(0)}</span>
+            </div>
+
+            {/* 2. Inner Chart Area Wrapper (Absolutes aligned to px-8 py-2 equivalent) */}
+            <div 
+                ref={chartAreaRef}
+                className="absolute left-8 right-4 top-2 bottom-2 z-20 cursor-crosshair"
+                onMouseMove={handleMouseMove}
+                onMouseLeave={handleMouseLeave}
+            >
+                {/* Grid Lines (Background) */}
+                <div className="absolute inset-0 border-l border-b border-black/10 dark:border-white/10 pointer-events-none"></div>
+
+                {/* SVG Layer - ID for Snapshot */}
+                <svg id="waveform-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible pointer-events-none">
+                    {refLine > 0 && (
+                        <line x1="0" y1={refY} x2="100" y2={refY} stroke="currentColor" strokeOpacity="0.4" strokeDasharray="3" vectorEffect="non-scaling-stroke" strokeWidth="1" />
+                    )}
+                    {seriesConfig.map((conf, idx) => (
+                        conf.visible && (
+                            <polyline 
+                                key={idx}
+                                points={getPoints(idx)} 
+                                fill="none" 
+                                stroke={SERIES_COLORS[idx % 4]} 
+                                strokeWidth="1.5" 
+                                vectorEffect="non-scaling-stroke"
+                                className="transition-all duration-300"
+                            />
+                        )
+                    ))}
+                </svg>
+
+                {/* Interaction Overlay Layer (Dots & Line) */}
+                {hoverIndex !== null && hoverData && (
+                    <div className="absolute inset-0 pointer-events-none">
+                        {/* Vertical Cursor Line */}
+                        <div 
+                            className="absolute top-0 bottom-0 border-l border-white/40 shadow-[0_0_4px_rgba(255,255,255,0.3)]" 
+                            style={{ left: `${hoverXPct}%` }}
+                        />
+                        
+                        {/* Data Points Dots */}
+                        {seriesConfig.map((conf, idx) => {
+                            if (!conf.visible) return null;
+                            const val = hoverData.values[idx];
+                            if (val === undefined || val === null || isNaN(val)) return null;
+                            
+                            // Exact Y position calculation matching SVG
+                            const y = 100 - ((val - minVal) / range) * 100;
+                            
+                            return (
+                                <div 
+                                    key={idx}
+                                    className="absolute size-2.5 rounded-full border-[1.5px] border-white shadow-md z-30 transition-transform duration-75"
+                                    style={{ 
+                                        left: `${hoverXPct}%`, 
+                                        top: `${y}%`,
+                                        backgroundColor: SERIES_COLORS[idx % 4],
+                                        transform: 'translate(-50%, -50%)'
+                                    }}
+                                />
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+
+            {/* 3. Floating Tooltip (Global relative to chart container) */}
+            {hoverIndex !== null && hoverData && (
+                <div 
+                    className="absolute bg-zinc-900/95 backdrop-blur border border-white/10 rounded-lg p-2.5 shadow-2xl text-[10px] font-mono whitespace-nowrap z-50 pointer-events-none"
+                    style={{ 
+                        left: hoverXPct < 50 ? `calc(${hoverXPct}% + 40px)` : 'auto', // Offset from cursor
+                        right: hoverXPct >= 50 ? `calc(${100 - hoverXPct}% + 4px)` : 'auto', // Offset from right
+                        top: '10px',
+                    }}
+                >
+                    <div className="text-zinc-400 mb-1.5 border-b border-white/10 pb-1 flex justify-between gap-4">
+                        <span>IDX: {hoverIndex}</span>
+                        <span>{new Date(hoverData.timestamp).toLocaleTimeString()}</span>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                        {seriesConfig.map((conf, idx) => {
+                            if (!conf.visible) return null;
+                            const val = hoverData.values[idx];
+                            return (
+                                <div key={idx} className="flex items-center gap-3">
+                                    <div className="flex items-center gap-1.5 w-16">
+                                        <div className="size-1.5 rounded-full" style={{ backgroundColor: SERIES_COLORS[idx % 4] }}></div>
+                                        <span className="text-zinc-300 truncate">{conf.name || `S${idx+1}`}</span>
+                                    </div>
+                                    <span className="font-bold text-white ml-auto font-mono text-xs">
+                                        {val !== undefined && val !== null ? val.toFixed(2) : '--'}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+            
+            {/* 4. Legend (Always Visible for Snapshot) */}
+            {hoverIndex === null && (
+                <div className="absolute top-2 right-2 flex flex-col gap-1 items-end pointer-events-none z-20 transition-opacity duration-200">
+                    {seriesConfig.map((conf, idx) => {
+                        if (!conf.visible) return null;
+                        const lastPoint = dataHistory[dataHistory.length - 1];
+                        const lastVal = (lastPoint && lastPoint.values) ? lastPoint.values[idx] : null;
+                        
+                        return (
+                            <div key={idx} className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-mono shadow-sm border border-white/10">
+                                <span className="opacity-80 text-[9px] uppercase tracking-wide text-white">{conf.name || `Series ${idx+1}`}</span>
+                                <span className="font-bold" style={{ color: SERIES_COLORS[idx % 4] }}>
+                                    {lastVal !== undefined && lastVal !== null ? lastVal.toFixed(2) : '--'}
+                                </span>
+                                <div className="size-1.5 rounded-full" style={{ backgroundColor: SERIES_COLORS[idx % 4] }}></div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};
+
 export default function App() {
-  // --- States ---
-  const [port, setPort] = useState(null);
-  const [availablePorts, setAvailablePorts] = useState([]); 
-  const [isConnected, setIsConnected] = useState(false);
-  const readerRef = useRef(null);
-  const closingRef = useRef(false);
-  const baudRef = useRef(null);
-  
-  // Buffering Logic
-  const rxBufferRef = useRef('');
-  const rxTimeoutRef = useRef(null);
-  const logContainerRef = useRef(null); 
-
-  // Interaction States
-  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
-  const [isBaudDropdownOpen, setIsBaudDropdownOpen] = useState(false);
-  const [portSearchQuery, setPortSearchQuery] = useState('');
-  const [isPaused, setIsPaused] = useState(false);
-  const isPausedRef = useRef(false);
-
-  // Log Management
-  const [logs, setLogs] = useState([]);
-  const [autoScroll, setAutoScroll] = useState(true);
-  const [viewMode, setViewMode] = useState('ascii'); 
-  const [logFilter, setLogFilter] = useState('');
-
-  // Persisted Config
   const usePersistedState = (key, defaultValue) => {
     const [state, setState] = useState(() => {
-      try {
-        const item = localStorage.getItem(key);
-        return item ? JSON.parse(item) : defaultValue;
-      } catch (e) { return defaultValue; }
+      try { 
+          const item = localStorage.getItem(key + '_v4'); 
+          return item ? JSON.parse(item) : defaultValue; 
+      } catch { return defaultValue; }
     });
-    useEffect(() => { localStorage.setItem(key, JSON.stringify(state)); }, [key, state]);
+    useEffect(() => { localStorage.setItem(key + '_v4', JSON.stringify(state)); }, [key, state]);
     return [state, setState];
   };
 
-  const [baudRate, setBaudRate] = usePersistedState('sf_baud', 115200);
-  const [encoding, setEncoding] = usePersistedState('sf_enc', 'utf-8'); 
-  const [highlightKeyword, setHighlightKeyword] = usePersistedState('sf_hl_kw', '');
-  const [highlightColor, setHighlightColor] = usePersistedState('sf_hl_col', 'text-amber-400 bg-amber-400/25 border-amber-400/50');
-  const [quickCommands, setQuickCommands] = usePersistedState('sf_cmds', [
-    { id: 1, label: 'Status', cmd: 'AT+STATUS?' },
-    { id: 2, label: 'Reset', cmd: 'AT+RST' },
-    { id: 3, label: 'Info', cmd: 'AT+GMR' },
-  ]);
-  const [useHexSend, setUseHexSend] = usePersistedState('sf_hex_send', false);
-  const [lineEnding, setLineEnding] = usePersistedState('sf_eol', '\\n'); 
-  const [appendCRC, setAppendCRC] = usePersistedState('sf_crc', false);
+  const [port, setPort] = useState(null);
+  const portRef = useRef(null);
+  const [availablePorts, setAvailablePorts] = useState([]);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isSerialAllowed, setIsSerialAllowed] = useState(true);
+  const readerRef = useRef(null);
+  const closingRef = useRef(false);
+  const baudRef = useRef(null);
+  const rxBufferRef = useRef('');
+  const pausedBufferRef = useRef(''); // Buffer for data received while paused
+  const rxTimeoutRef = useRef(null);
+  const logContainerRef = useRef(null);
 
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
+  const [isBaudDropdownOpen, setIsBaudDropdownOpen] = useState(false);
+  const [isMacroModalOpen, setIsMacroModalOpen] = useState(false);
+  const [isMainMenuOpen, setIsMainMenuOpen] = useState(false);
+  const [isSnapshotGalleryOpen, setIsSnapshotGalleryOpen] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isPdfLibraryLoaded, setIsPdfLibraryLoaded] = useState(false); // Track PDF lib
+
+  const [isPlotterOpen, setIsPlotterOpen] = useState(false);
+  const [isPlotterFullscreen, setIsPlotterFullscreen] = useState(false);
+  const [isPlotterSettingsOpen, setIsPlotterSettingsOpen] = useState(false);
+  
+  const [plotData, setPlotData] = useState([]);
+  const [snapshots, setSnapshots] = useState([]);
+  const [refLineValue, setRefLineValue] = useState(0);
+  
+  const [seriesConfig, setSeriesConfig] = useState([
+      { id: 0, name: 'Current', keyword: '', visible: true },
+      { id: 1, name: 'Voltage', keyword: '', visible: true },
+      { id: 2, name: 'Power', keyword: '', visible: false },
+      { id: 3, name: 'Temp', keyword: '', visible: false },
+  ]);
+
+  const [editingId, setEditingId] = useState(null);
+  const [editLabel, setEditLabel] = useState('');
+  const [editCmdStr, setEditCmdStr] = useState('');
+
+  const [logs, setLogs] = useState([]);
   const [inputText, setInputText] = useState('');
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [viewMode, setViewMode] = useState('ascii');
+  const [logFilter, setLogFilter] = useState('');
+  const [lastActivity, setLastActivity] = useState({ type: null, time: 0 });
+  const [copyFeedback, setCopyFeedback] = useState(null);
+  
   const [sendHistory, setSendHistory] = usePersistedState('sf_history', []);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [isEditingCmds, setIsEditingCmds] = useState(false);
-  const [copyFeedback, setCopyFeedback] = useState(null);
-  const [lastActivity, setLastActivity] = useState({ type: null, time: 0 });
+  const [baudRate, setBaudRate] = usePersistedState('sf_baud', 115200);
+  const [encoding, setEncoding] = usePersistedState('sf_enc', 'utf-8');
+  const [highlightKeyword, setHighlightKeyword] = usePersistedState('sf_hl_kw', '');
+  const [highlightColor, setHighlightColor] = usePersistedState('sf_hl_col', 'bg-[#f4d03f] text-black border-[#f4d03f]'); 
+  const [quickCommands, setQuickCommands] = usePersistedState('sf_cmds', [
+    { id: 1, label: 'STATUS', cmd: 'AT+STATUS?' },
+    { id: 2, label: 'RESET', cmd: 'AT+RST' },
+    { id: 3, label: 'VERSION', cmd: 'AT+GMR' },
+    { id: 4, label: 'WIFI', cmd: 'AT+CWMODE=1' },
+  ]);
+  const [useHexSend, setUseHexSend] = usePersistedState('sf_hex_send', false);
+  const [lineEnding, setLineEnding] = usePersistedState('sf_eol', '\\n');
+  const [appendCRC, setAppendCRC] = usePersistedState('sf_crc', false);
+  const [showTimestamp, setShowTimestamp] = usePersistedState('sf_show_ts', true);
+  const [theme, setTheme] = usePersistedState('sf_theme', 'light');
+  const isDark = theme === 'dark';
+
+  const [timerEnabled, setTimerEnabled] = useState(false);
+  const [timerInterval, setTimerInterval] = usePersistedState('sf_timer_ms', 1000);
+  const timerRef = useRef(null);
+  const inputTextRef = useRef('');
 
   const isWebSerialSupported = 'serial' in navigator;
 
-  // --- Logic ---
+  // Load jsPDF dynamically
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    script.onload = () => setIsPdfLibraryLoaded(true);
+    document.body.appendChild(script);
+  }, []);
+
+  useEffect(() => { portRef.current = port; }, [port]);
+  useEffect(() => { inputTextRef.current = inputText; }, [inputText]);
+
+  // -- Refs for Stale Closure Fixes (Pause & AddLog) --
+  const isPausedRef = useRef(isPaused);
   useEffect(() => { isPausedRef.current = isPaused; }, [isPaused]);
 
-  const updatePorts = async () => {
+  // Create a ref for addLog to ensure the loop calls the latest version (with current props)
+  const addLogRef = useRef(null);
+  
+  const updatePorts = useCallback(async () => {
     if (!isWebSerialSupported) return;
-    try { setAvailablePorts(await navigator.serial.getPorts()); } catch (e) {}
-  };
+    try { 
+      const ports = await navigator.serial.getPorts();
+      setAvailablePorts(ports); 
+      setIsSerialAllowed(true); 
+    } catch (e) { setIsSerialAllowed(false); }
+  }, [isWebSerialSupported]);
+
+  const disconnectPort = useCallback(async () => {
+    closingRef.current = true;
+    setTimerEnabled(false);
+    if (timerRef.current) clearInterval(timerRef.current);
+    try {
+      if (readerRef.current) await readerRef.current.cancel();
+      const currentPort = portRef.current;
+      if (currentPort) await currentPort.close();
+    } catch (e) { console.error(e); }
+    setPort(null);
+    portRef.current = null;
+    setIsConnected(false);
+  }, []);
 
   useEffect(() => {
-    updatePorts();
     if (!isWebSerialSupported) return;
-    navigator.serial.addEventListener('connect', updatePorts);
-    navigator.serial.addEventListener('disconnect', (e) => {
-      updatePorts();
-      if (port === e.target) disconnectPort();
-    });
-  }, [port]);
+    const handleConnect = () => { updatePorts(); };
+    const handleDisconnect = (e) => { updatePorts(); if (portRef.current === e.target) disconnectPort(); };
+    updatePorts();
+    navigator.serial.addEventListener('connect', handleConnect);
+    navigator.serial.addEventListener('disconnect', handleDisconnect);
+    return () => {
+      navigator.serial.removeEventListener('connect', handleConnect);
+      navigator.serial.removeEventListener('disconnect', handleDisconnect);
+    };
+  }, [isWebSerialSupported, updatePorts, disconnectPort]);
+
+  const getTimestamp = useCallback(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}.${String(now.getMilliseconds()).padStart(3,'0')}`;
+  }, []);
+
+  const parseNumbersFromLog = (text) => {
+      if (typeof text !== 'string') return [];
+      const matches = text.match(/-?\d+(\.\d+)?/g);
+      return matches ? matches.map(Number) : [];
+  };
+
+  const parseDataForChart = (text) => {
+      let extractedValues = [];
+      let foundKeyword = false;
+      seriesConfig.forEach((conf, idx) => {
+          if (!conf.visible) { extractedValues[idx] = null; return; }
+          if (conf.keyword && conf.keyword.trim() !== '') {
+              const escapedKey = conf.keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const regex = new RegExp(`${escapedKey}\\s*[:=-]?\\s*(-?\\d+(\\.\\d+)?)`, 'i');
+              const match = text.match(regex);
+              if (match) { extractedValues[idx] = parseFloat(match[1]); foundKeyword = true; } 
+              else { extractedValues[idx] = null; }
+          }
+      });
+      const hasAnyKeywords = seriesConfig.some(s => s.keyword && s.keyword.trim() !== '');
+      if (!hasAnyKeywords && !foundKeyword) {
+          const allNumbers = text.match(/-?\d+(\.\d+)?/g);
+          if (allNumbers) {
+              const nums = allNumbers.map(Number);
+              seriesConfig.forEach((conf, idx) => {
+                  if (idx < nums.length) {
+                      if (conf.visible) extractedValues[idx] = nums[idx];
+                      else extractedValues[idx] = null;
+                  } else extractedValues[idx] = null;
+              });
+              return extractedValues;
+          }
+      }
+      if (extractedValues.every(v => v === null)) return [];
+      return extractedValues;
+  };
+
+  const addLog = useCallback((newLog) => {
+    if (newLog.type === 'rx') {
+        const vals = parseDataForChart(newLog.text);
+        if (vals && vals.length > 0) {
+            setPlotData(prev => [...prev, { values: vals, timestamp: Date.now() }].slice(-150));
+        }
+    }
+    // FIX 1: Completely removed merging logic.
+    // Every flush creates a new line, ensuring 1-to-1 data-to-label mapping.
+    setLogs(prev => [...prev, { ...newLog, _ts: Date.now() }]);
+  }, [seriesConfig]);
+
+  // Update refs whenever addLog changes
+  useEffect(() => {
+      addLogRef.current = addLog;
+  }, [addLog]);
+
+  // --- Flush buffer when unpaused ---
+  useEffect(() => {
+      if (!isPaused && pausedBufferRef.current) {
+          // Add accumulated data to rxBuffer and process
+          rxBufferRef.current += pausedBufferRef.current;
+          pausedBufferRef.current = '';
+          
+          // Trigger a flush if we have data
+          if (rxBufferRef.current && addLogRef.current) {
+              addLogRef.current({ id: Math.random(), timestamp: getTimestamp(), text: rxBufferRef.current, type: 'rx' });
+              rxBufferRef.current = '';
+          }
+      }
+  }, [isPaused, getTimestamp]);
+
+  const simulateRxData = () => {
+      let fakeText = "";
+      const hasKeywords = seriesConfig.some(s => s.keyword);
+      if (hasKeywords) {
+          fakeText = seriesConfig.filter(s => s.visible && s.keyword).map(s => `${s.keyword} ${(Math.random() * 100).toFixed(1)}`).join(', ');
+      } else {
+          fakeText = Array(4).fill(0).map(() => (Math.random() * 100).toFixed(1)).join(', ');
+      }
+      if(!fakeText) fakeText = "No series visible or config";
+      addLog({ id: Math.random(), timestamp: getTimestamp(), text: fakeText, type: 'rx' });
+  };
+
+  const sendDataDirect = useCallback(async (text) => {
+    if (!port?.writable || !text) return;
+    const writer = port.writable.getWriter();
+    try {
+      let data;
+      let display;
+      if (useHexSend) {
+        const bytes = parseHexString(text);
+        if (!bytes) { writer.releaseLock(); return; }
+        data = bytes;
+        display = bufferToHex(bytes);
+      } else {
+        let str = text;
+        if (lineEnding === '\\n') str += '\n'; else if (lineEnding === '\\r\\n') str += '\r\n';
+        data = new TextEncoder().encode(str);
+        display = str.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
+      }
+      if (appendCRC) {
+        const crc = calculateCRC16(data);
+        const merged = new Uint8Array(data.length + 2); merged.set(data); merged.set(crc, data.length);
+        data = merged; display += ` [CRC16]`;
+      }
+      await writer.write(data);
+      setLastActivity({ type: 'tx', time: Date.now() });
+      addLog({ id: Math.random(), timestamp: getTimestamp(), text: display, type: 'tx' });
+    } catch (e) { console.error(e); } finally { writer.releaseLock(); }
+  }, [appendCRC, getTimestamp, lineEnding, port, useHexSend, addLog]);
+
+  useEffect(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (timerEnabled && isConnected) {
+      timerRef.current = setInterval(() => { if (inputTextRef.current) sendDataDirect(inputTextRef.current); }, timerInterval);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [timerEnabled, isConnected, timerInterval, sendDataDirect]);
+
+  // --- Read Loop with Caching Logic ---
+  const readLoop = async (selectedPort) => {
+    const textDecoder = new TextDecoderStream(encoding);
+    const readableStreamClosed = selectedPort.readable.pipeTo(textDecoder.writable);
+    const reader = textDecoder.readable.getReader();
+    readerRef.current = reader;
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          reader.releaseLock();
+          break;
+        }
+        if (value) {
+          // If paused, accumulate in pausedBufferRef
+          if (isPausedRef.current) {
+              pausedBufferRef.current += value;
+          } else {
+              // Not paused, process normally
+              rxBufferRef.current += value;
+              // Debounce logic to batch updates
+              if (rxTimeoutRef.current) clearTimeout(rxTimeoutRef.current);
+              rxTimeoutRef.current = setTimeout(() => {
+                if (rxBufferRef.current) {
+                  if (addLogRef.current) {
+                      addLogRef.current({ id: Math.random(), timestamp: getTimestamp(), text: rxBufferRef.current, type: 'rx' });
+                  }
+                  rxBufferRef.current = '';
+                }
+              }, 50); 
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Read Error: ", error);
+    } finally {
+      if(readerRef.current) readerRef.current.releaseLock();
+    }
+  };
 
   const openPort = async (selectedPort) => {
     try {
       await selectedPort.open({ baudRate: parseInt(baudRate) || 115200 });
       setPort(selectedPort);
+      portRef.current = selectedPort;
       setIsConnected(true);
       setIsConnectModalOpen(false);
       closingRef.current = false;
       readLoop(selectedPort);
-    } catch (error) {
-      alert(`Connection failed: ${error.message}`);
-    }
-  };
-
-  const flushBuffer = () => {
-    if (rxBufferRef.current.length > 0) {
-      const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 });
-      const content = rxBufferRef.current;
-      setLogs(prev => [...prev, { id: Math.random(), timestamp, text: content, type: 'rx' }].slice(-1500));
-      rxBufferRef.current = '';
-    }
-  };
-
-  const readLoop = async (p) => {
-    const decoder = new TextDecoder(encoding);
-    readerRef.current = p.readable.getReader();
-    try {
-      while (true) {
-        const { value, done } = await readerRef.current.read();
-        if (done) break;
-        if (value && !isPausedRef.current) {
-          setLastActivity({ type: 'rx', time: Date.now() });
-          
-          if (viewMode === 'hex') {
-            const hexContent = bufferToHex(value);
-            const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 });
-            setLogs(prev => [...prev, { id: Math.random(), timestamp, text: hexContent, type: 'rx' }].slice(-1500));
-          } else {
-            const decoded = decoder.decode(value, { stream: true });
-            rxBufferRef.current += decoded;
-
-            if (rxTimeoutRef.current) clearTimeout(rxTimeoutRef.current);
-
-            if (rxBufferRef.current.includes('\n')) {
-              const lines = rxBufferRef.current.split('\n');
-              rxBufferRef.current = lines.pop(); 
-              const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 });
-              const newEntries = lines.map(line => ({ 
-                id: Math.random(), timestamp, text: line.replace('\r', ''), type: 'rx' 
-              }));
-              setLogs(prev => [...prev, ...newEntries].slice(-1500));
-            }
-            rxTimeoutRef.current = setTimeout(flushBuffer, 50);
-          }
-        }
-      }
-    } catch (e) {
-      if (!closingRef.current) console.error(e);
-    } finally {
-      if (readerRef.current) {
-        try { readerRef.current.releaseLock(); } catch(e) {}
-      }
-    }
-  };
-
-  const disconnectPort = async () => {
-    closingRef.current = true;
-    try {
-      if (readerRef.current) await readerRef.current.cancel();
-      if (port) await port.close();
-    } catch (e) { console.error(e); }
-    setPort(null);
-    setIsConnected(false);
+    } catch (error) { alert(`Connection failed: ${error.message}`); }
   };
 
   const sendData = async (textOverride = null) => {
     const text = textOverride !== null ? textOverride : inputText;
     if (!port?.writable || !text) return;
-
     const writer = port.writable.getWriter();
     try {
       let data;
       let display;
-
       if (useHexSend) {
         const bytes = parseHexString(text);
         if (!bytes) throw new Error("Invalid HEX String");
@@ -3260,434 +574,646 @@ export default function App() {
         display = bufferToHex(bytes);
       } else {
         let str = text;
-        if (lineEnding === '\\n') str += '\n';
-        else if (lineEnding === '\\r') str += '\r';
-        else if (lineEnding === '\\r\\n') str += '\r\n';
+        if (lineEnding === '\\n') str += '\n'; else if (lineEnding === '\\r\\n') str += '\r\n';
         data = new TextEncoder().encode(str);
         display = str.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
       }
-
       if (appendCRC) {
         const crc = calculateCRC16(data);
-        const merged = new Uint8Array(data.length + 2);
-        merged.set(data);
-        merged.set(crc, data.length);
-        data = merged;
-        display += ` [CRC16]`;
+        const merged = new Uint8Array(data.length + 2); merged.set(data); merged.set(crc, data.length);
+        data = merged; display += ` [CRC16]`;
       }
-
       await writer.write(data);
       setLastActivity({ type: 'tx', time: Date.now() });
-      setLogs(prev => [...prev, { 
-        id: Math.random(), 
-        timestamp: new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 }), 
-        text: display, 
-        type: 'tx' 
-      }].slice(-1500));
-
+      addLog({ id: Math.random(), timestamp: getTimestamp(), text: display, type: 'tx' });
       if (textOverride === null) {
-        setSendHistory(prev => {
-          const filtered = prev.filter(h => h !== text);
-          return [text, ...filtered].slice(0, 50);
-        });
-        setHistoryIndex(-1);
-        setInputText('');
+        setSendHistory(prev => { const filtered = prev.filter(h => h !== text); return [text, ...filtered].slice(0, 50); });
+        setHistoryIndex(-1); setInputText('');
       }
-    } catch (e) {
-      alert(`Send failed: ${e.message}`);
-    } finally {
-      writer.releaseLock();
-    }
+    } catch (e) { alert(`Send failed: ${e.message}`); } finally { writer.releaseLock(); }
   };
 
+  const saveToMacro = () => {
+      if (!inputText.trim()) return;
+      const newMacro = { id: Date.now(), label: `CMD ${quickCommands.length + 1}`, cmd: inputText.trim() };
+      setQuickCommands([...quickCommands, newMacro]);
+      setCopyFeedback("Saved Macro");
+      setTimeout(() => setCopyFeedback(null), 1000);
+  };
+
+  const handleChartSnapshot = useCallback(() => {
+      const svgElement = document.querySelector("#waveform-chart-svg");
+      if (!svgElement) { setCopyFeedback("No Chart"); setTimeout(() => setCopyFeedback(null), 1000); return; }
+      
+      const serializer = new XMLSerializer();
+      let source = serializer.serializeToString(svgElement);
+      if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){ source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"'); }
+      if(!source.match(/^<svg[^>]+xmlns:xlink/)){ source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"'); }
+      source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
+      
+      const url = "data:image/svg+xml;charset=utf-8,"+encodeURIComponent(source);
+      
+      const img = new Image();
+      img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const bbox = svgElement.getBoundingClientRect();
+          const scale = 2;
+          const padding = 40; 
+          const width = bbox.width * scale + padding * 2;
+          const height = bbox.height * scale + padding * 2;
+          
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          
+          // 1. Fill Background
+          ctx.fillStyle = isDark ? "#1E1F20" : "#FFFFFF";
+          ctx.fillRect(0, 0, width, height);
+          
+          // 2. Data Scaling Calculation (Must match WaveformChart logic)
+          let allValues = [];
+          plotData.forEach(p => p.values.forEach((v, i) => {
+              if (seriesConfig[i]?.visible && v != null && !isNaN(v)) allValues.push(v);
+          }));
+          if (refLineValue > 0) allValues.push(refLineValue * 1.1);
+          
+          const maxVal = allValues.length ? Math.max(...allValues) : 100;
+          const minVal = allValues.length ? Math.min(...allValues) : 0;
+          const range = maxVal - minVal || 1;
+
+          // 3. Draw Grid
+          ctx.strokeStyle = isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)";
+          ctx.lineWidth = 1;
+          const cols = 10; const rows = 6;
+          const drawW = bbox.width * scale;
+          const drawH = bbox.height * scale;
+          const startX = padding;
+          const startY = padding;
+          
+          for(let i=0; i<=cols; i++) { ctx.beginPath(); ctx.moveTo(startX + (drawW/cols)*i, startY); ctx.lineTo(startX + (drawW/cols)*i, startY + drawH); ctx.stroke(); }
+          for(let i=0; i<=rows; i++) { ctx.beginPath(); ctx.moveTo(startX, startY + (drawH/rows)*i); ctx.lineTo(startX + drawW, startY + (drawH/rows)*i); ctx.stroke(); }
+
+          // 4. Draw Chart Image
+          ctx.drawImage(img, startX, startY, drawW, drawH);
+          
+          // 5. Draw Data Values (Smart Sampling)
+          const labelStep = Math.max(1, Math.floor(plotData.length / 25));
+
+          plotData.forEach((p, i) => {
+              if (i % labelStep !== 0 && i !== plotData.length - 1) return; // Always draw last point
+
+              seriesConfig.forEach((conf, sIdx) => {
+                  if (!conf.visible) return;
+                  const val = p.values[sIdx];
+                  if (val === undefined || val === null || isNaN(val)) return;
+
+                  const x = startX + (i / (plotData.length - 1)) * drawW;
+                  const y = startY + drawH - ((val - minVal) / range) * drawH;
+
+                  // Draw Point
+                  ctx.fillStyle = SERIES_COLORS[sIdx % 4];
+                  ctx.beginPath();
+                  ctx.arc(x, y, 3, 0, Math.PI * 2);
+                  ctx.fill();
+
+                  // Draw Label
+                  ctx.fillStyle = isDark ? "rgba(255,255,255,0.9)" : "rgba(0,0,0,0.9)";
+                  ctx.font = "bold 10px monospace"; 
+                  const text = val.toFixed(1);
+                  const textWidth = ctx.measureText(text).width;
+                  
+                  // Smart position
+                  let tx = x - textWidth / 2;
+                  let ty = y - 8;
+                  
+                  if (ty < startY + 10) ty = y + 15;
+                  
+                  ctx.fillText(text, tx, ty);
+              });
+          });
+          
+          // 6. Draw Legend
+          const lastPoint = plotData[plotData.length - 1];
+          if(lastPoint) {
+              let legendY = padding + 10;
+              ctx.font = "bold 14px monospace";
+              ctx.textAlign = "right";
+              seriesConfig.forEach((conf, idx) => {
+                 if(conf.visible) {
+                     ctx.fillStyle = SERIES_COLORS[idx % 4];
+                     const val = lastPoint.values[idx]?.toFixed(2) || '--';
+                     ctx.fillText(`${conf.name}: ${val}`, width - padding - 10, legendY);
+                     legendY += 20;
+                 } 
+              });
+          }
+
+          const meta = { timestamp: new Date().toLocaleString(), values: lastPoint ? lastPoint.values : [] };
+          const pngUrl = canvas.toDataURL("image/png");
+          setSnapshots(prev => [...prev, { id: Date.now(), url: pngUrl, meta }]);
+          setCopyFeedback("Snapshot Stored");
+          setTimeout(() => setCopyFeedback(null), 1000);
+      };
+      img.src = url;
+  }, [isDark, plotData, seriesConfig, refLineValue]);
+
+  // --- HTML Report Export (Enhanced Formatting) ---
+  const generateReportHtml = () => {
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Portax Waveform Report</title>
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 40px; background: #f8fafc; color: #334155; }
+                .container { max-width: 1280px; margin: 0 auto; }
+                h1 { text-align: center; color: #0f172a; margin-bottom: 8px; font-size: 24px; font-weight: 700; }
+                .meta { text-align: center; color: #64748b; font-size: 13px; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid #e2e8f0; }
+                .card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 30px; overflow: hidden; page-break-inside: avoid; }
+                .card-header { background: #f1f5f9; px-6 py-3; padding: 12px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+                .card-header h3 { margin: 0; font-size: 14px; color: #0f172a; font-weight: 600; }
+                .card-header .ts { font-family: monospace; font-size: 12px; color: #64748b; }
+                .card-body { padding: 20px; }
+                /* Image adjustment: max-width 100%, centered */
+                .img-wrapper { text-align: center; margin-bottom: 20px; background: #fafafa; border-radius: 8px; padding: 5px; border: 1px solid #f1f5f9; }
+                .card img { width: 100%; height: auto; display: block; } 
+                .data-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+                .data-item { display: flex; justify-content: space-between; font-size: 12px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 4px; }
+                .data-label { color: #64748b; }
+                .data-val { font-family: monospace; font-weight: 700; color: #0f172a; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>Portax Report</h1>
+                <div class="meta">Generated: ${new Date().toLocaleString()} &bull; Total Snapshots: ${snapshots.length}</div>
+                ${snapshots.map((s, i) => `
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Snapshot #${i+1}</h3>
+                            <span class="ts">${s.meta.timestamp}</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="img-wrapper">
+                                <img src="${s.url}" />
+                            </div>
+                            <div class="data-grid">
+                                ${s.meta.values.map((v, idx) => seriesConfig[idx]?.visible ? `
+                                    <div class="data-item">
+                                        <span class="data-label" style="color:${SERIES_COLORS[idx%4]}">● ${seriesConfig[idx].name}</span>
+                                        <span class="data-val">${v !== null ? v.toFixed(3) : 'N/A'}</span>
+                                    </div>` : '').join('')}
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </body>
+        </html>`;
+  };
+
+  // --- JS PDF Export Logic (Enhanced) ---
+  const handleExportPdf = () => {
+    if (!window.jspdf) { alert("PDF Library loading..."); return; }
+    if (snapshots.length === 0) return;
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 15;
+    const contentWidth = pageWidth - (margin * 2);
+    
+    let y = margin;
+
+    // Title Section
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(22);
+    doc.setTextColor(33, 33, 33);
+    doc.text("Portax Report", pageWidth / 2, y + 5, { align: "center" });
+    y += 15;
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, y, { align: "center" });
+    doc.setDrawColor(220);
+    doc.line(margin, y + 5, pageWidth - margin, y + 5);
+    y += 15;
+
+    snapshots.forEach((s, i) => {
+        // Calculate dimensions to check for page breaks
+        const imgProps = doc.getImageProperties(s.url);
+        // Constrain image width to 80% of content width to keep it tidy
+        const imgDisplayWidth = contentWidth * 0.8; 
+        const imgDisplayHeight = (imgProps.height * imgDisplayWidth) / imgProps.width;
+        
+        const metaHeight = 15; 
+        const dataHeight = (Math.ceil(s.meta.values.length / 2) * 6) + 15; // Approx height for data grid
+        const totalBlockHeight = metaHeight + imgDisplayHeight + dataHeight + 15; // + padding
+
+        // Page break check
+        if (y + totalBlockHeight > pageHeight - margin) {
+            doc.addPage();
+            y = margin;
+        }
+
+        // --- Block Header (Grey Bar) ---
+        doc.setFillColor(248, 250, 252); // Very light grey
+        doc.rect(margin, y, contentWidth, 8, 'F');
+        doc.setDrawColor(226, 232, 240);
+        doc.rect(margin, y, contentWidth, 8, 'S');
+
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(51, 65, 85);
+        doc.text(`Snapshot #${i + 1}`, margin + 3, y + 5.5);
+        
+        doc.setFont("courier", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(100, 116, 139);
+        doc.text(s.meta.timestamp, pageWidth - margin - 3, y + 5.5, { align: "right" });
+        
+        y += 12;
+
+        // --- Image (Centered) ---
+        const xOffset = margin + (contentWidth - imgDisplayWidth) / 2;
+        doc.addImage(s.url, 'PNG', xOffset, y, imgDisplayWidth, imgDisplayHeight);
+        doc.setDrawColor(226, 232, 240);
+        doc.rect(xOffset, y, imgDisplayWidth, imgDisplayHeight); // Border around image
+        y += imgDisplayHeight + 5;
+
+        // --- Data Values (Two-Column Grid) ---
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(71, 85, 105);
+        doc.text("Captured Values:", margin, y + 4);
+        y += 8;
+
+        doc.setFont("courier", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(15, 23, 42);
+
+        let col = 0;
+        const colWidth = contentWidth / 2;
+        
+        s.meta.values.forEach((v, idx) => {
+            const conf = seriesConfig[idx];
+            if (conf && conf.visible) {
+                 const xPos = col === 0 ? margin + 5 : margin + colWidth + 5;
+                 const valStr = v !== null ? v.toFixed(3) : 'N/A';
+                 const nameStr = conf.name || `Series ${idx+1}`;
+                 
+                 doc.setTextColor(100, 116, 139); // Label color
+                 doc.text(`${nameStr}:`, xPos, y);
+                 doc.setTextColor(15, 23, 42); // Value color
+                 doc.text(`${valStr}`, xPos + 35, y);
+                 
+                 // Simple separator line
+                 doc.setDrawColor(241, 245, 249);
+                 doc.line(xPos, y + 2, xPos + colWidth - 10, y + 2);
+
+                 if (col === 1) {
+                     col = 0;
+                     y += 6;
+                 } else {
+                     col = 1;
+                 }
+            }
+        });
+        if (col === 1) y += 6; // Finish last row if odd number
+
+        // Spacer between blocks
+        y += 10;
+    });
+
+    doc.save(`Portax_Report_${new Date().toISOString().slice(0,10)}.pdf`);
+  };
+
+  const handleViewReport = () => {
+     if(snapshots.length === 0) return;
+     const html = generateReportHtml();
+     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+     const url = URL.createObjectURL(blob);
+     window.open(url, '_blank');
+  };
+
+  const moveToTop = (index) => { if (index === 0) return; const newCmds = [...quickCommands]; const item = newCmds.splice(index, 1)[0]; newCmds.unshift(item); setQuickCommands(newCmds); };
+  const startEditing = (cmd) => { setEditingId(cmd.id); setEditLabel(cmd.label); setEditCmdStr(cmd.cmd); };
+  const saveEdit = () => { if(!editLabel.trim() || !editCmdStr.trim()) return; setQuickCommands(prev => prev.map(c => c.id === editingId ? { ...c, label: editLabel, cmd: editCmdStr } : c)); setEditingId(null); };
+  const deleteMacro = (id) => { setQuickCommands(prev => prev.filter(c => c.id !== id)); };
+  const cycleLineEnding = () => { if (lineEnding === '\\n') setLineEnding('\\r\\n'); else if (lineEnding === '\\r\\n') setLineEnding(''); else setLineEnding('\\n'); };
+  const getLineEndingLabel = () => lineEnding === '\\n' ? '\\n' : lineEnding === '\\r\\n' ? '\\r\\n' : 'NONE';
+
   const handleKeyDown = (e) => {
-    if (e.ctrlKey && e.key === 'Enter') {
-      sendData();
-    } else if (e.key === 'ArrowUp') {
-      if (sendHistory.length > 0 && !e.shiftKey) {
-        e.preventDefault();
-        const nextIndex = Math.min(historyIndex + 1, sendHistory.length - 1);
-        setHistoryIndex(nextIndex);
-        setInputText(sendHistory[nextIndex]);
-      }
-    } else if (e.key === 'ArrowDown') {
-      if (historyIndex >= 0) {
-        e.preventDefault();
-        const nextIndex = historyIndex - 1;
-        setHistoryIndex(nextIndex);
-        if (nextIndex === -1) setInputText('');
-        else setInputText(sendHistory[nextIndex]);
-      }
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendData(); }
+    else if (e.key === 'ArrowUp') { if (sendHistory.length > 0 && !e.shiftKey) { e.preventDefault(); const next = Math.min(historyIndex + 1, sendHistory.length - 1); setHistoryIndex(next); setInputText(sendHistory[next]); } }
+    else if (e.key === 'ArrowDown') { if (historyIndex >= 0) { e.preventDefault(); const next = historyIndex - 1; setHistoryIndex(next); if (next === -1) setInputText(''); else setInputText(sendHistory[next]); } }
   };
 
   const renderContent = (text) => {
     const safeText = String(text || '');
     if (viewMode === 'hex' || !highlightKeyword) return safeText;
-    const parts = safeText.split(new RegExp(`(${highlightKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
-    return parts.map((part, i) => 
-      part.toLowerCase() === highlightKeyword.toLowerCase() 
-        ? <span key={i} className={`${highlightColor} font-bold px-0.5 rounded-sm border border-current shadow-[0_0_8px_rgba(255,255,255,0.1)]`}>{part}</span>
-        : part
-    );
+    const parts = safeText.split(new RegExp(`(${String(highlightKeyword).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+    return parts.map((part, i) => part.toLowerCase() === highlightKeyword.toLowerCase() ? <span key={i} className={`rounded-sm px-0.5 ${highlightColor}`}>{part}</span> : part);
   };
 
-  // Fixed Auto-Scroll logic to prevent overall container jumping
   useEffect(() => {
-    if (autoScroll && logContainerRef.current && !logFilter) {
-      const container = logContainerRef.current;
-      // Use direct scrollTop manipulation to avoid browser's "centering" scroll behavior
-      requestAnimationFrame(() => {
-        container.scrollTop = container.scrollHeight;
-      });
-    }
+    if (autoScroll && logContainerRef.current && !logFilter) { const container = logContainerRef.current; requestAnimationFrame(() => { container.scrollTop = container.scrollHeight; }); }
   }, [logs, autoScroll, logFilter]);
 
-  const HIGHLIGHT_PRESETS = [
-    'text-emerald-400 bg-emerald-400/25 border-emerald-400/50',
-    'text-amber-400 bg-amber-400/25 border-amber-400/50',
-    'text-rose-400 bg-rose-400/25 border-rose-400/50',
-    'text-cyan-400 bg-cyan-400/25 border-cyan-400/50',
-    'text-fuchsia-400 bg-fuchsia-400/25 border-fuchsia-400/50',
-    'text-blue-400 bg-blue-400/25 border-blue-400/50',
-    'text-orange-400 bg-orange-400/25 border-orange-400/50',
-    'text-lime-400 bg-lime-400/25 border-lime-400/50',
-  ];
-
+  const HIGHLIGHT_PRESETS = [ 'bg-[#ecf0f1] text-black border-[#ecf0f1]', 'bg-[#e74c3c] text-white border-[#e74c3c]', 'bg-[#1abc9c] text-white border-[#1abc9c]', 'bg-[#f4d03f] text-black border-[#f4d03f]', 'bg-[#3b82f6] text-white border-[#3b82f6]' ];
   const COMMON_BAUD_RATES = [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
 
+  const t = {
+    pageBg: isDark ? 'bg-[#000000]' : 'bg-[#FAFAFA]', 
+    windowBg: isDark ? 'bg-[#09090b]' : 'bg-[#FFFFFF]', 
+    textPrimary: isDark ? 'text-[#E4E4E7]' : 'text-[#18181B]', 
+    textSecondary: isDark ? 'text-[#A1A1AA]' : 'text-[#52525B]', 
+    textTertiary: isDark ? 'text-[#71717A]' : 'text-[#A1A1AA]',
+    border: isDark ? 'border-[#27272A]' : 'border-[#E4E4E7]',
+    borderHover: isDark ? 'border-[#52525B]' : 'border-[#D4D4D8]',
+    panelBg: isDark ? 'bg-[#18181B]' : 'bg-[#FFFFFF]', 
+    inputBg: isDark ? 'bg-[#000000]' : 'bg-[#F4F4F5]', 
+    hoverBg: isDark ? 'hover:bg-[#27272A]' : 'hover:bg-[#F4F4F5]',
+    accentFill: isDark ? 'bg-[#10b981]' : 'bg-[#059669]', 
+    accentText: 'text-white', 
+    accentHover: isDark ? 'hover:bg-[#34d399]' : 'hover:bg-[#047857]',
+  };
+
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-[#010101] text-zinc-100 font-sans selection:bg-emerald-500/30 overflow-hidden relative">
-      
-      {/* Background Layer */}
-      <div className="absolute inset-0 pointer-events-none z-0">
-         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-emerald-900/10 via-zinc-950/90 to-zinc-950 opacity-80"></div>
-         <div className="absolute top-[20%] left-[-10%] size-[800px] bg-emerald-500/5 blur-[150px] rounded-full animate-pulse transition-all duration-[8000ms]"></div>
-         <div className="absolute bottom-[-10%] right-[-10%] size-[600px] bg-emerald-600/5 blur-[120px] rounded-full transition-all"></div>
-         <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}></div>
-         <div className="absolute inset-0 opacity-[0.02]" style={{ backgroundImage: 'linear-gradient(rgba(16, 185, 129, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(16, 185, 129, 0.1) 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-      </div>
-
-      {/* Main Window - Strictly Fixed Height Container */}
-      <div className="relative w-[75vw] h-[72vh] max-w-[960px] max-h-[640px] flex flex-col animate-in fade-in zoom-in-95 duration-700 
-        shadow-[0_0_80px_-20px_rgba(16,185,129,0.2),0_40px_100px_-20px_rgba(0,0,0,1)] 
-        rounded-2xl border border-white/10 bg-zinc-900/95 backdrop-blur-3xl overflow-hidden ring-1 ring-white/10">
+    <div className={`flex h-screen w-full items-center justify-center ${t.pageBg} ${t.textPrimary} font-sans selection:bg-emerald-500/30 overflow-hidden relative transition-colors duration-500`}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+        .font-sans { font-family: 'Inter', system-ui, sans-serif; letter-spacing: -0.01em; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: ${isDark ? '#27272A' : '#D4D4D8'}; border-radius: 99px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: ${isDark ? '#52525B' : '#A1A1AA'}; }
         
-        <div className="absolute inset-0 pointer-events-none border border-emerald-500/10 rounded-2xl opacity-40 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)]"></div>
-
-        {/* Title Bar */}
-        <div className="h-8 bg-black/40 border-b border-white/10 flex items-center justify-between px-4 select-none flex-none z-50">
-            <div className="flex gap-2">
-                <div className="size-2.5 rounded-full bg-[#FF5F56] shadow-[0_0_6px_rgba(255,95,86,0.3)]"></div>
-                <div className="size-2.5 rounded-full bg-[#FFBD2E] shadow-[0_0_6px_rgba(255,189,46,0.3)]"></div>
-                <div className="size-2.5 rounded-full bg-[#27C93F] shadow-[0_0_6px_rgba(39,201,63,0.3)]"></div>
+        .bg-grid-pattern {
+            background-image: linear-gradient(to right, ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'} 1px, transparent 1px),
+                              linear-gradient(to bottom, ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'} 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+      `}</style>
+      
+      {/* Main Window */}
+      <div className={`relative w-[80vw] h-[75vh] max-w-[1000px] flex flex-col shadow-xl z-10
+        rounded-3xl ${t.border} border ${t.windowBg} overflow-hidden transition-all duration-300`}>
+        {/* --- Header --- */}
+        <div className={`h-12 border-b ${t.border} flex items-center justify-between px-6 select-none flex-none ${t.panelBg}`}>
+            <div className="flex items-center gap-3">
+                <div className="relative">
+                    <button onClick={() => setIsMainMenuOpen(!isMainMenuOpen)} className={`p-1.5 rounded-lg hover:${t.hoverBg} ${t.textSecondary} transition-colors`}><Menu size={18} /></button>
+                    {isMainMenuOpen && (
+                        <div className={`absolute top-full left-0 mt-2 w-48 rounded-xl border ${t.border} ${t.windowBg} shadow-xl py-2 z-[100] flex flex-col`}>
+                            <div className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest ${t.textTertiary}`}>View</div>
+                            <button onClick={() => { setIsPlotterOpen(false); setIsMainMenuOpen(false); }} className={`px-4 py-2 text-left text-xs hover:${t.hoverBg} flex items-center gap-2 ${!isPlotterOpen ? 'text-emerald-500' : t.textPrimary}`}><Terminal size={14} /> Terminal</button>
+                            <button onClick={() => { setIsPlotterOpen(true); setIsMainMenuOpen(false); }} className={`px-4 py-2 text-left text-xs hover:${t.hoverBg} flex items-center gap-2 ${isPlotterOpen ? 'text-emerald-500' : t.textPrimary}`}><LineChart size={14} /> Monitor</button>
+                            <div className={`h-px ${t.border} my-1`}></div>
+                            <div className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest ${t.textTertiary}`}>Tools</div>
+                            <button onClick={() => { simulateRxData(); setIsMainMenuOpen(false); }} className={`px-4 py-2 text-left text-xs hover:${t.hoverBg} flex items-center gap-2 ${t.textPrimary}`}><Zap size={14} /> Simulate RX</button>
+                            <button onClick={() => { handleExportLogs(); setIsMainMenuOpen(false); }} className={`px-4 py-2 text-left text-xs hover:${t.hoverBg} flex items-center gap-2 ${t.textPrimary}`}><Download size={14} /> Export CSV</button>
+                        </div>
+                    )}
+                </div>
+                <span className={`text-sm font-semibold tracking-tight ${t.textPrimary}`}>Port<span className="opacity-50 font-normal">ax</span></span>
             </div>
-            <div className="text-[9px] font-black text-zinc-500 tracking-[0.4em] uppercase flex items-center gap-2 opacity-60 group">
-                <Command size={11} className="text-emerald-400 group-hover:scale-110 transition-transform duration-500" />
-                SERIAL FLUX PRO <span className="text-[7px] px-1.5 py-0.5 bg-emerald-500/10 rounded text-emerald-400 font-mono tracking-normal shadow-[0_0_10px_rgba(52,211,153,0.2)]">STABLE_V2.2</span>
+            <div className="flex items-center gap-2">
+                <button onClick={() => setIsSnapshotGalleryOpen(true)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${t.border} ${t.hoverBg} ${t.textSecondary} text-[10px] transition-colors`}><ImageIcon size={12}/> Gallery ({snapshots.length})</button>
+                <button onClick={() => setTheme(isDark ? 'light' : 'dark')} className={`size-8 flex items-center justify-center rounded-full border ${t.border} ${t.hoverBg} ${t.textSecondary} transition-colors`}>{isDark ? <Sun size={14} /> : <Moon size={14} />}</button>
             </div>
-            <div className="w-12"></div> 
         </div>
 
+        {/* --- Body --- */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Main Log Area */}
-          <main className="flex-1 flex flex-col min-w-0 relative bg-black/5">
-            
-            <div className="absolute top-2.5 left-4 z-20 flex items-center gap-3 px-3 py-1.5 pr-5 rounded-full border border-white/10 backdrop-blur-md bg-zinc-900/80 shadow-xl ring-1 ring-white/5 scale-90 origin-left">
-              <div className={`size-6 rounded-full flex items-center justify-center transition-all ${isConnected ? 'bg-emerald-500 text-black shadow-[0_0:15px_rgba(16,185,129,0.5)]' : 'bg-zinc-800 text-zinc-500'}`}>
-                {isConnected ? <Activity size={12} className="animate-pulse" /> : <Zap size={12} />}
-              </div>
-              <div className="flex flex-col leading-none">
-                  <span className={`text-[10px] font-black tracking-widest uppercase ${isConnected ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                    {isConnected ? 'Active' : 'Offline'}
-                  </span>
-                  {isConnected && <span className="text-[8px] text-zinc-400 font-mono mt-0.5 uppercase opacity-60">{baudRate} BAUD</span>}
-              </div>
+          <main className={`flex-1 flex flex-col min-w-0 relative ${t.windowBg}`}>
+            {/* Toolbar */}
+            <div className={`h-12 border-b ${t.border} flex items-center px-6 gap-4 ${t.panelBg}`}>
+                <div className={`flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full border transition-all duration-300 ${isConnected ? 'border-emerald-500/30 bg-emerald-500/5' : `${t.border} bg-transparent`}`}>
+                    <div className="relative flex items-center justify-center size-2.5"><Activity size={14} className={`${isConnected ? 'text-emerald-500 animate-pulse' : t.textTertiary}`} /></div>
+                    <span className={`text-xs font-bold uppercase tracking-wider ${isConnected ? 'text-emerald-500' : t.textTertiary}`}>{isConnected ? 'Connected' : 'Offline'}</span>
+                </div>
+                <div className={`h-5 w-px ${isDark ? 'bg-white/10' : 'bg-black/10'}`}></div>
+                <div className="flex-1 flex items-center gap-3">
+                    <Filter size={14} className={t.textTertiary} />
+                    <input value={logFilter} onChange={e => setLogFilter(e.target.value)} placeholder="Search logs..." className={`bg-transparent border-none outline-none text-xs font-medium w-full ${t.textPrimary} placeholder:${t.textTertiary}`} />
+                </div>
+                <div className={`flex border ${t.border} rounded-full p-1 ${t.inputBg}`}>
+                    <button onClick={()=>setViewMode('ascii')} className={`px-4 py-1 rounded-full text-[10px] font-bold transition-all ${viewMode==='ascii' ? `${t.accentFill} ${t.accentText} shadow-sm` : `${t.textSecondary} hover:${t.textPrimary}`}`}>TXT</button>
+                    <button onClick={()=>setViewMode('hex')} className={`px-4 py-1 rounded-full text-[10px] font-bold transition-all ${viewMode==='hex' ? `${t.accentFill} ${t.accentText} shadow-sm` : `${t.textSecondary} hover:${t.textPrimary}`}`}>HEX</button>
+                </div>
+                <div className="flex gap-2">
+                     <button onClick={() => setIsPaused(!isPaused)} className={`size-8 flex items-center justify-center rounded-full border ${t.border} hover:${t.hoverBg} transition-colors ${isPaused ? 'text-amber-500 border-amber-500/50' : t.textSecondary}`}>{isPaused ? <Play size={14} fill="currentColor" /> : <Pause size={14} />}</button>
+                     <button onClick={() => setLogs([])} className={`size-8 flex items-center justify-center rounded-full border ${t.border} hover:${t.hoverBg} ${t.textSecondary} hover:text-rose-500 transition-colors`}><Trash2 size={14} /></button>
+                </div>
             </div>
 
-            <div className="absolute top-2.5 right-4 z-20 flex items-center gap-2 scale-90 origin-right">
-                <div className="relative group">
-                    <Filter size={12} className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${logFilter ? 'text-emerald-400' : 'text-zinc-500'}`} />
-                    <input type="text" value={logFilter} onChange={e => setLogFilter(e.target.value)} placeholder="Live Filter..." className="h-8 pl-9 pr-3 rounded-full border border-white/10 bg-black/60 text-[10px] w-28 focus:w-48 transition-all outline-none focus:border-emerald-500/40 shadow-inner placeholder:opacity-30" />
+            {/* Split Content */}
+            <div className="flex-1 flex flex-col min-h-0 relative">
+                <div ref={logContainerRef} className={`flex-1 p-6 overflow-y-auto custom-scrollbar font-mono text-[12px] leading-relaxed transition-all duration-300 ${isPlotterOpen ? 'basis-2/3' : 'basis-full'}`}>
+                    {logs.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center select-none opacity-30">
+                            <Terminal size={64} className="text-emerald-500" strokeWidth={1.5} />
+                            <span className="mt-4 text-xs font-bold uppercase tracking-widest text-emerald-500/80">Ready to Receive</span>
+                            {!isWebSerialSupported && <div className="mt-2 text-rose-500 text-[10px]">Browser Not Supported</div>}
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-2"> 
+                            {logs.filter(l => !logFilter || String(l.text).toLowerCase().includes(logFilter.toLowerCase())).map((log) => (
+                                <div key={log.id} onClick={() => navigator.clipboard.writeText(String(log.text))} className={`flex gap-3 px-3 py-1 items-start rounded-lg cursor-pointer hover:${t.hoverBg} group transition-colors`}>
+                                    {showTimestamp && <span className={`shrink-0 text-[11px] ${t.textTertiary} select-none font-medium opacity-60 pt-[2px]`}>{log.timestamp}</span>}
+                                    {/* Kept w-10 but ensured no flex shrinkage */}
+                                    <span className={`shrink-0 text-[10px] font-bold w-10 text-center select-none rounded border px-0.5 pt-0.5 mt-[1px] ${log.type === 'tx' ? (isDark ? 'text-blue-400 border-blue-400/50' : 'text-blue-600 border-blue-600/30') : (isDark ? 'text-emerald-400 border-emerald-400/50' : 'text-emerald-600 border-emerald-600/30')}`}>{log.type === 'tx' ? 'TX' : 'RX'}</span>
+                                    {/* Added min-w-0 to prevent text overflow issues */}
+                                    <span className={`break-all whitespace-pre-wrap min-w-0 ${log.type === 'tx' ? (isDark ? 'text-blue-400' : 'text-blue-600') : (isDark ? 'text-emerald-400' : 'text-emerald-600')} opacity-90`}>{renderContent(log.text)}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
-                <div className="flex items-center gap-1.5">
-                    <div className="flex bg-black/70 border border-white/10 rounded-full p-0.5 shadow-lg ring-1 ring-white/5">
-                        <button onClick={() => setViewMode('ascii')} className={`w-12 py-1 rounded-full text-[10px] font-black tracking-wider transition-all ${viewMode === 'ascii' ? 'bg-zinc-700 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>ASC</button>
-                        <button onClick={() => setViewMode('hex')} className={`w-12 py-1 rounded-full text-[10px] font-black tracking-wider transition-all ${viewMode === 'hex' ? 'bg-zinc-700 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>HEX</button>
+                {isPlotterOpen && (
+                    <div className={`transition-all duration-300 border-t ${t.border} bg-black/5 flex flex-col ${isPlotterFullscreen ? `absolute inset-0 z-50 ${isDark ? 'bg-black/90' : 'bg-white/90'} backdrop-blur-md bg-grid-pattern` : 'basis-1/3 min-h-[160px]'}`}>
+                        <div className={`h-8 px-4 flex items-center justify-between ${t.panelBg} border-b ${t.border} bg-opacity-80`}>
+                            <div className="flex items-center gap-2"><Activity size={12} className={t.textTertiary} /><span className={`text-[10px] font-bold uppercase ${t.textSecondary}`}>Waveform</span></div>
+                            <div className="flex items-center gap-4">
+                                <button onClick={handleChartSnapshot} className={`${t.textTertiary} hover:${t.textPrimary}`} title="Snapshot"><Camera size={12} /></button>
+                                <button onClick={() => setIsPlotterSettingsOpen(!isPlotterSettingsOpen)} className={`${t.textTertiary} hover:${t.textPrimary}`}><Settings2 size={12} /></button>
+                                <button onClick={() => setIsPlotterFullscreen(!isPlotterFullscreen)} className={`${t.textTertiary} hover:${t.textPrimary}`}>{isPlotterFullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}</button>
+                            </div>
+                        </div>
+                        {isPlotterSettingsOpen && (
+                            <div className={`absolute top-9 right-4 z-[60] p-3 rounded-xl border ${t.border} ${t.inputBg} shadow-xl w-56`}>
+                                <div className="text-[10px] font-bold uppercase mb-2 text-zinc-500">Series Config</div>
+                                <div className="space-y-2">
+                                    {seriesConfig.map((conf, i) => (
+                                        <div key={i} className={`flex items-center gap-2 text-[11px]`}>
+                                            <button onClick={() => {const n=[...seriesConfig];n[i].visible=!n[i].visible;setSeriesConfig(n)}}>{conf.visible ? <Eye size={12} style={{color: SERIES_COLORS[i]}}/> : <EyeOff size={12} className={t.textTertiary}/>}</button>
+                                            <input value={conf.name} onChange={e=>{const n=[...seriesConfig];n[i].name=e.target.value;setSeriesConfig(n)}} className={`w-12 bg-transparent border-b ${t.border} outline-none ${t.textPrimary}`} placeholder="Name"/>
+                                            <input value={conf.keyword} onChange={e=>{const n=[...seriesConfig];n[i].keyword=e.target.value;setSeriesConfig(n)}} className={`flex-1 bg-transparent border-b ${t.border} outline-none ${t.textTertiary}`} placeholder="Keyword (opt)"/>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        <div className="flex-1 p-2 relative"><WaveformChart dataHistory={plotData} seriesConfig={seriesConfig} refLine={refLineValue} /></div>
                     </div>
-                    <div className="flex bg-black/70 border border-white/10 rounded-full p-0.5 shadow-lg ring-1 ring-white/5">
-                        <button onClick={() => setEncoding('utf-8')} className={`w-15 py-1 rounded-full text-[10px] font-black tracking-wider transition-all ${encoding === 'utf-8' ? 'bg-emerald-600/30 text-emerald-400 border border-emerald-500/20 shadow-inner' : 'text-zinc-500 hover:text-zinc-300'}`}>UTF-8</button>
-                        <button onClick={() => setEncoding('gbk')} className={`w-15 py-1 rounded-full text-[10px] font-black tracking-wider transition-all ${encoding === 'gbk' ? 'bg-emerald-600/30 text-emerald-400 border border-emerald-500/20 shadow-inner' : 'text-zinc-500 hover:text-zinc-300'}`}>GBK</button>
-                    </div>
-                </div>
-                {isConnected && (
-                  <button
-                    onClick={() => setIsPaused(!isPaused)}
-                    className={`size-8 rounded-full flex items-center justify-center border transition-all shadow-lg ${isPaused ? 'bg-amber-500 text-black border-amber-400 shadow-amber-500/30' : 'bg-black/60 border-white/10 text-zinc-400 hover:text-white hover:bg-white/10'}`}
-                    title={isPaused ? "Resume" : "Pause"}
-                  >
-                    {isPaused ? <Play size={14} fill="currentColor" /> : <Pause size={14} fill="currentColor" />}
-                  </button>
                 )}
-                <button
-                  onClick={() => {
-                    const content = logs.map(l => `[${l.timestamp}] ${l.type === 'tx' ? 'TX' : 'RX'}: ${l.text}`).join('\n');
-                    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = `serial_log_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.txt`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
-                  }}
-                  disabled={logs.length === 0}
-                  className="size-8 rounded-full flex items-center justify-center bg-black/60 border border-white/10 text-zinc-400 hover:text-emerald-400 transition-all shadow-lg disabled:opacity-30 disabled:cursor-not-allowed"
-                  title="Download Log"
-                >
-                  <Download size={14} />
-                </button>
-                <button onClick={() => setLogs([])} className="size-8 rounded-full flex items-center justify-center bg-black/60 border border-white/10 text-zinc-400 hover:text-rose-400 transition-all shadow-lg" title="Clear Log"><Trash2 size={14} /></button>
             </div>
 
-            {/* Scrollable Container with explicit Ref and Style */}
-            <div 
-              ref={logContainerRef} 
-              className="flex-1 pt-14 pb-2 px-5 overflow-y-auto custom-scrollbar font-mono text-[13px] leading-relaxed relative"
-              style={{ overflowAnchor: 'none' }} 
-            >
-              {logs.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center opacity-20 select-none transition-all">
-                    <Terminal size={56} className="text-emerald-400 mb-4 drop-shadow-[0_0_10px_rgba(52,211,153,0.3)]" strokeWidth={1.5} />
-                    <p className="tracking-[0.6em] font-black text-sm uppercase text-emerald-500/60">STANDBY_PROBE</p>
+            {/* Footer Stats */}
+            <div className={`h-10 border-t ${t.border} flex items-center justify-between px-6 text-[11px] font-medium ${t.textSecondary} ${t.panelBg}`}>
+                <div className="flex gap-6">
+                    <div className="flex items-center gap-2"><div className={`size-1.5 rounded-full transition-all duration-300 ${Date.now() - lastActivity.time < 150 && lastActivity.type === 'rx' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] scale-150' : 'bg-emerald-500/40'}`}></div><span className={isDark ? 'text-emerald-400' : 'text-emerald-600'}>RX <span className={t.textPrimary}>{logs.filter(l => l.type === 'rx').length}</span></span></div>
+                    <div className="flex items-center gap-2"><div className={`size-1.5 rounded-full transition-all duration-300 ${Date.now() - lastActivity.time < 150 && lastActivity.type === 'tx' ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] scale-150' : 'bg-blue-500/40'}`}></div><span className={isDark ? 'text-blue-400' : 'text-blue-600'}>TX <span className={t.textPrimary}>{logs.filter(l => l.type === 'tx').length}</span></span></div>
                 </div>
-              ) : (
-                <div className="space-y-0.5">
-                  {logs.filter(l => !logFilter || String(l.text).toLowerCase().includes(logFilter.toLowerCase())).map((log) => (
-                    <div key={log.id} onClick={() => { navigator.clipboard.writeText(String(log.text)); setCopyFeedback("COPIED!"); setTimeout(()=>setCopyFeedback(null), 1000); }} className="flex items-start gap-2 hover:bg-white/[0.04] -mx-4 px-4 py-0.5 rounded cursor-pointer group transition-colors border border-transparent">
-                      <span className="text-[10px] text-zinc-600 shrink-0 font-mono select-none opacity-50 tabular-nums">{log.timestamp}</span>
-                      <span className={`shrink-0 text-[10px] font-black px-1.5 rounded-sm border min-w-[22px] text-center ${log.type === 'tx' ? 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20 shadow-[0_0_5px_rgba(34,211,238,0.1)]' : 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20 shadow-[0_0_5px_rgba(52,211,153,0.2)]'}`}>{log.type === 'tx' ? 'TX' : 'RX'}</span>
-                      <div className={`flex-1 break-all ${log.type === 'tx' ? 'text-zinc-400 italic' : 'text-emerald-300 font-medium'}`}>
-                        {renderContent(log.text)}
-                      </div>
-                    </div>
-                  ))}
+                <div className="flex gap-6">
+                    <button onClick={()=>setAutoScroll(!autoScroll)} className={`flex items-center gap-2 hover:${t.textPrimary} transition-colors group`}>AutoScroll <div className={`size-1.5 rounded-full transition-colors ${autoScroll ? 'bg-emerald-500' : 'bg-neutral-400'}`}></div></button>
+                    <button onClick={()=>setShowTimestamp(!showTimestamp)} className={`flex items-center gap-2 hover:${t.textPrimary} transition-colors group`}>Time <div className={`size-1.5 rounded-full transition-colors ${showTimestamp ? 'bg-emerald-500' : 'bg-neutral-400'}`}></div></button>
                 </div>
-              )}
-            </div>
-
-            <div className="h-8 flex items-center justify-between px-5 text-[10px] text-zinc-500 select-none border-t border-white/5 bg-black/40">
-                <div className="flex items-center gap-8 font-black uppercase tracking-tight opacity-70">
-                    <span className="flex items-center gap-3"><span className={`size-1.5 rounded-full transition-all duration-200 ${Date.now() - lastActivity.time < 100 && lastActivity.type === 'rx' ? 'bg-emerald-400 shadow-[0_0:12px_rgba(52,211,153,1)] scale-110' : 'bg-emerald-950'}`}></span> RX: {logs.filter(l => l.type === 'rx').length}</span>
-                    <span className="flex items-center gap-3"><span className={`size-1.5 rounded-full transition-all duration-200 ${Date.now() - lastActivity.time < 100 && lastActivity.type === 'tx' ? 'bg-emerald-500 shadow-[0_0:12px_rgba(16,185,129,1)] scale-110' : 'bg-emerald-900'}`}></span> TX: {logs.filter(l => l.type === 'tx').length}</span>
-                </div>
-                <label className="flex items-center gap-3 cursor-pointer hover:text-zinc-300 transition-colors group scale-90 origin-right">
-                    <div className={`size-2 rounded-full transition-colors ${autoScroll ? 'bg-emerald-500 shadow-[0_0:8px_rgba(16,185,129,0.8)]' : 'bg-zinc-800'}`}></div>
-                    <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} className="hidden" />
-                    <span className="font-bold tracking-widest uppercase text-[9px]">AutoScroll</span>
-                </label>
             </div>
           </main>
 
-          <aside className="w-[240px] bg-[#0a0a0c] border-l border-white/10 flex flex-col z-20 relative p-3.5 space-y-3.5 overflow-y-auto custom-scrollbar shadow-[-10px_0:30px_rgba(0,0,0,0.5)]">
-            
-            <div className="bg-zinc-900/40 border border-white/10 rounded-xl p-3 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
-                <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-3 flex items-center gap-2"><Plug size={12} className="text-emerald-400" /> Session</h3>
-                <div className="space-y-2.5">
-                   <div className="relative w-full" ref={baudRef}>
-                      <button onClick={() => !isConnected && setIsBaudDropdownOpen(!isBaudDropdownOpen)} className="w-full h-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-[11px] font-mono font-bold flex items-center justify-between hover:bg-zinc-800 transition-all shadow-lg group">
-                        <span className="text-zinc-500 group-hover:text-zinc-200">{baudRate}</span>
-                        <ChevronDown size={11} className={isBaudDropdownOpen ? "rotate-180 transition-transform" : "transition-transform"} />
-                      </button>
-                      {isBaudDropdownOpen && (
-                          <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-white/20 rounded-lg shadow-[0:10px_30px_rgba(0,0,0,0.9)] z-50 max-h-40 overflow-y-auto ring-1 ring-white/10 custom-scrollbar">
-                              {COMMON_BAUD_RATES.map(rate => (
-                                  <button key={rate} onClick={() => { setBaudRate(rate); setIsBaudDropdownOpen(false); }} className="w-full text-left px-3 py-2 text-[11px] font-mono font-bold hover:bg-emerald-500/20 transition-colors border-b border-white/5 last:border-0">{rate}</button>
-                              ))}
-                          </div>
-                      )}
-                   </div>
-                   <button 
-                    onClick={isConnected ? disconnectPort : () => setIsConnectModalOpen(true)} 
-                    className={`w-full py-2.5 rounded-lg font-black text-[10px] tracking-[0.2em] transition-all shadow-xl active:scale-[0.98] ${isConnected ? 'bg-rose-500/10 text-rose-500 border border-rose-500/30 hover:bg-rose-500/20' : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-500/10'}`}
-                   >
-                    {isConnected ? 'DISCONNECT' : 'CONNECT'}
-                   </button>
-                </div>
-            </div>
-
-            <div className="bg-zinc-900/40 border border-white/10 rounded-xl p-3 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
-                 <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] flex items-center gap-2"><List size={12} className="text-emerald-400" /> Macros</h3>
-                    <button onClick={() => setIsEditingCmds(!isEditingCmds)} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 transition-all border border-white/5 shadow-sm">{isEditingCmds ? <Save size={12} /> : <Edit2 size={12} />}</button>
-                 </div>
-                 <div className="space-y-2">
-                 {isEditingCmds ? (
-                   <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1 custom-scrollbar">
-                      {quickCommands.map(cmd => (
-                        <div key={cmd.id} className="flex flex-col gap-1 p-2 bg-black/40 rounded-lg border border-white/10 relative border-l-2 border-l-emerald-500/50">
-                          <div className="flex gap-1.5">
-                             <input type="text" placeholder="Lbl" value={cmd.label} onChange={e => {const n=[...quickCommands]; n.find(c=>c.id===cmd.id).label=e.target.value; setQuickCommands(n);}} className="w-14 bg-zinc-800 border border-white/10 rounded px-1.5 py-0.5 text-[10px] focus:border-emerald-500/40 outline-none font-bold text-zinc-300" />
-                             <input type="text" placeholder="Cmd" value={cmd.cmd} onChange={e => {const n=[...quickCommands]; n.find(c=>c.id===cmd.id).cmd=e.target.value; setQuickCommands(n);}} className="flex-1 bg-zinc-800 border border-white/10 rounded px-1.5 py-0.5 text-[10px] font-mono text-emerald-400 focus:border-emerald-500/40 outline-none" />
-                             <button onClick={() => setQuickCommands(prev => prev.filter(c => c.id !== cmd.id))} className="size-5 bg-rose-600/10 text-rose-500 rounded flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all border border-rose-500/20"><X size={10}/></button>
-                          </div>
-                        </div>
-                      ))}
-                      <button onClick={() => setQuickCommands([...quickCommands, {id: Date.now(), label:'NEW', cmd:''}])} className="w-full py-1.5 border border-dashed border-white/20 rounded-lg text-[9px] text-zinc-500 hover:text-emerald-400 transition-all font-black uppercase">+ ADD MACRO</button>
-                   </div>
-                 ) : (
-                   <div className="flex flex-col gap-2 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
-                      {quickCommands.map(cmd => (
-                        <button 
-                            key={cmd.id} 
-                            onClick={() => sendData(cmd.cmd)} 
-                            disabled={!isConnected} 
-                            className="group flex items-center justify-between p-2.5 px-3 bg-black/60 border border-white/5 rounded-lg hover:border-emerald-500/60 hover:bg-zinc-800/80 transition-all disabled:opacity-20 active:translate-x-1 shadow-md text-left"
-                        >
-                           <div className="overflow-hidden">
-                               <div className="text-[11px] font-black text-zinc-200 uppercase tracking-widest truncate">{cmd.label}</div>
-                               <div className="text-[9px] font-mono text-zinc-500 truncate opacity-60 mt-1">{cmd.cmd}</div>
-                           </div>
-                           <ChevronRight size={12} className="text-zinc-800 group-hover:text-emerald-400 transition-colors shrink-0" />
-                        </button>
-                      ))}
-                   </div>
-                 )}
-                 </div>
-            </div>
-
-            <div className="bg-zinc-900/40 border border-white/10 rounded-xl p-3 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
-                <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-2.5 flex items-center gap-2"><Highlighter size={12} className="text-emerald-400" /> Highlighting</h3>
+          {/* Right: Sidebar */}
+          <aside className={`w-[260px] border-l ${t.border} flex flex-col z-20 ${t.panelBg}`}>
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4">
                 <div className="space-y-3">
-                    <input type="text" value={highlightKeyword} onChange={e => setHighlightKeyword(e.target.value)} placeholder="Keyword..." className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-[11px] outline-none focus:border-emerald-500/40 transition-all font-bold text-emerald-400" />
-                    <div className="flex gap-1.5 justify-between px-0.5">
-                        {HIGHLIGHT_PRESETS.map((c, i) => (
-                            <button 
-                                key={i} 
-                                onClick={() => setHighlightColor(c)} 
-                                className={`size-5 rounded-sm transition-all border-2 ${c.split(' ')[1]} ${highlightColor === c ? 'border-white scale-110 shadow-[0_0:12px_rgba(255,255,255,0.2)]' : 'border-transparent opacity-30 hover:opacity-100 hover:scale-105'}`}
-                            ></button>
-                        ))}
+                    <h3 className={`text-[11px] font-bold uppercase tracking-widest ${t.textTertiary} flex items-center gap-2 px-1`}><Plug size={12} /> Connection</h3>
+                    <div className="flex flex-col gap-3">
+                        <div className={`relative border ${t.border} rounded-2xl ${t.inputBg} transition-colors hover:${t.borderHover}`} ref={baudRef}>
+                             <button onClick={() => !isConnected && setIsBaudDropdownOpen(!isBaudDropdownOpen)} disabled={isConnected} className={`w-full h-11 flex items-center justify-between px-4 text-xs font-mono font-medium ${isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}><span>{baudRate} BAUD</span><ChevronDown size={14} className={t.textTertiary} /></button>
+                             {isBaudDropdownOpen && !isConnected && (<div className={`absolute top-full left-0 right-0 mt-2 z-50 border ${t.border} ${t.windowBg} shadow-2xl rounded-xl max-h-48 overflow-y-auto custom-scrollbar p-1`}>{COMMON_BAUD_RATES.map(r => (<button key={r} onClick={() => { setBaudRate(r); setIsBaudDropdownOpen(false); }} className={`w-full text-left px-4 py-2.5 text-xs font-mono rounded-lg hover:${t.hoverBg} transition-colors`}>{r}</button>))}</div>)}
+                        </div>
+                        <button onClick={isConnected ? disconnectPort : () => setIsConnectModalOpen(true)} className={`w-full h-11 rounded-2xl text-xs font-bold tracking-wide border transition-all active:scale-[0.98] ${isConnected ? `border-neutral-500/20 text-neutral-500 hover:bg-neutral-500/10` : `${t.accentFill} ${t.accentText} border-transparent shadow-md hover:opacity-90`}`}>{isConnected ? 'DISCONNECT' : 'CONNECT DEVICE'}</button>
                     </div>
+                </div>
+                <div className={`h-px w-full ${t.border}`}></div>
+                <div className="space-y-2">
+                    <h3 className={`text-[11px] font-bold uppercase tracking-widest ${t.textTertiary} px-1`}>Highlight</h3>
+                    <div className="flex flex-col gap-2">
+                        <input value={highlightKeyword} onChange={e => setHighlightKeyword(e.target.value)} placeholder="Keyword..." className={`w-full px-3 py-1.5 rounded-lg border ${t.border} ${t.inputBg} ${t.textPrimary} text-xs focus:border-neutral-500 outline-none placeholder:${t.textTertiary} transition-colors`}/>
+                        <div className="flex gap-2">{HIGHLIGHT_PRESETS.map((c, i) => (<button key={i} onClick={() => setHighlightColor(c)} className={`h-7 flex-1 rounded-lg border text-[10px] font-bold transition-transform hover:scale-105 ${c.split(' ')[0]} ${c.split(' ')[1]} ${c.split(' ')[2]}`}></button>))}</div>
+                    </div>
+                </div>
+                <div className={`h-px w-full ${t.border}`}></div>
+                <div className="space-y-3 flex-1">
+                     <div className="flex items-center justify-between px-1"><h3 className={`text-[11px] font-bold uppercase tracking-widest ${t.textTertiary} flex items-center gap-2`}><Cpu size={12} /> Fixed Cmds</h3></div>
+                     <div className="space-y-3">
+                        {quickCommands.slice(0, 3).map(cmd => (
+                            <button key={cmd.id} onClick={() => sendData(cmd.cmd)} disabled={!isConnected} className={`w-full group flex items-center justify-between p-3.5 rounded-2xl border ${t.border} ${t.inputBg} hover:border-neutral-500/30 transition-all disabled:opacity-50 text-left shadow-sm active:scale-[0.98]`}><span className={`text-[11px] font-bold ${t.textPrimary}`}>{cmd.label}</span><span className={`text-[10px] font-mono ${t.textTertiary} group-hover:${t.textSecondary} transition-colors`}>{cmd.cmd}</span></button>
+                        ))}
+                     </div>
                 </div>
             </div>
 
-            <div className="mt-auto space-y-2 border-t border-white/10 pt-3">
-                <div className="flex items-center justify-between px-1">
-                    <div className="flex gap-2">
-                        <button onClick={() => setAppendCRC(!appendCRC)} className={`px-2 py-0.5 rounded border text-[8px] font-black transition-all ${appendCRC ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.1)]' : 'bg-white/5 text-zinc-600 border-white/5'}`}>CRC16</button>
-                        <button onClick={() => setUseHexSend(!useHexSend)} className={`px-2 py-0.5 rounded border text-[8px] font-black transition-all ${useHexSend ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.1)]' : 'bg-white/5 text-zinc-600 border-white/5'}`}>HEX</button>
+            {/* Bottom Input Area */}
+            <div className={`p-4 border-t ${t.border} bg-transparent flex flex-col gap-3 relative`}>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                         <button onClick={() => setTimerEnabled(!timerEnabled)} className={`size-6 flex items-center justify-center rounded-md border ${t.border} ${timerEnabled ? 'text-amber-500 border-amber-500 bg-amber-500/10' : t.textTertiary} hover:${t.textPrimary} transition-colors`}><Timer size={12} /></button>
+                        <input type="number" value={timerInterval} onChange={e=>setTimerInterval(e.target.value)} className={`w-10 bg-transparent text-[10px] font-mono outline-none text-center ${t.textPrimary} border-b border-dashed border-neutral-500/30`} /><span className={`text-[9px] ${t.textTertiary}`}>ms</span>
                     </div>
-                    <div className="flex bg-black/40 border border-white/5 rounded overflow-hidden">
-                        {[ {label:'\\n', val:'\\n'}, {label:'Ø', val:'none'} ].map(opt => (
-                            <button key={opt.val} onClick={() => setLineEnding(opt.val)} className={`px-2 py-0.5 text-[8px] font-black transition-all ${lineEnding === opt.val ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-600 hover:text-zinc-500'}`}>{opt.label}</button>
-                        ))}
+                    <div className="flex items-center gap-1.5">
+                        <button onClick={() => setUseHexSend(!useHexSend)} className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-colors ${useHexSend ? `${t.accentFill} ${t.accentText} border-transparent` : `${t.border} ${t.textTertiary} hover:${t.textSecondary}`}`}>HEX</button>
+                        <button onClick={() => setAppendCRC(!appendCRC)} className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-colors ${appendCRC ? `${t.accentFill} ${t.accentText} border-transparent` : `${t.border} ${t.textTertiary} hover:${t.textSecondary}`}`}>CRC</button>
+                        <button onClick={cycleLineEnding} className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border transition-colors ${lineEnding !== '' ? `${t.accentFill} ${t.accentText} border-transparent` : `${t.border} ${t.textTertiary} hover:${t.textSecondary}`}`}>{getLineEndingLabel()}</button>
                     </div>
                 </div>
-                <div className="relative group">
-                    <textarea 
-                        value={inputText} 
-                        onChange={e => setInputText(e.target.value)} 
-                        onKeyDown={handleKeyDown} 
-                        placeholder="Type payload here... (↑/↓ History)" 
-                        className="w-full h-32 bg-black/60 border border-white/10 rounded-xl p-3 text-[12px] font-mono focus:outline-none focus:border-emerald-500/40 transition-all resize-none placeholder:opacity-20 shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)] text-emerald-100" 
-                    />
+                <div className="flex items-center gap-2">
+                     <button onClick={saveToMacro} className={`flex-1 py-1.5 rounded-md border ${t.border} ${t.textTertiary} hover:${t.textPrimary} hover:${t.hoverBg} transition-colors text-[10px] font-bold flex items-center justify-center gap-1.5`} title="Save as Macro"><BookmarkPlus size={12} /> <span className="uppercase tracking-wider">Save</span></button>
+                    <button onClick={() => setIsMacroModalOpen(true)} className={`flex-1 py-1.5 rounded-md border ${t.border} ${t.textTertiary} hover:${t.textPrimary} hover:${t.hoverBg} transition-colors text-[10px] font-bold flex items-center justify-center gap-1.5`} title="Manage Macros"><List size={12} /> <span className="uppercase tracking-wider">Macros</span></button>
                 </div>
-                <button 
-                  onClick={() => sendData()} 
-                  disabled={!isConnected} 
-                  className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-600 text-white text-[10px] font-black tracking-[0.3em] rounded-xl transition-all shadow-lg shadow-emerald-900/20 disabled:shadow-none flex items-center justify-center gap-2.5 active:scale-95 group"
-                >
-                    <Send size={15} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" /> SEND DATA
-                </button>
+                <textarea value={inputText} onChange={e => setInputText(e.target.value)} onKeyDown={handleKeyDown} className={`w-full h-20 p-3 rounded-xl border ${t.border} ${t.inputBg} ${t.textPrimary} text-xs font-mono outline-none focus:border-neutral-500 transition-all resize-none placeholder:${t.textTertiary} shadow-sm group-hover:${t.borderHover}`} placeholder="Type command..." />
+                <button onClick={() => sendData()} disabled={!isConnected} className={`w-full py-2.5 rounded-xl ${t.accentFill} ${t.accentText} ${t.accentHover} text-[11px] font-bold shadow-md hover:shadow-lg disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed transition-all active:scale-[0.98] flex items-center justify-center gap-2`}><Send size={14} /> SEND COMMAND</button>
             </div>
           </aside>
         </div>
 
-        {/* Feedback Toast */}
-        {copyFeedback && (
-            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[100] bg-zinc-800 border border-emerald-500/40 text-emerald-400 px-6 py-2 rounded-full text-[11px] font-black tracking-[0.3em] shadow-[0_15px_40px_rgba(0,0,0,0.6)] animate-in fade-in slide-in-from-bottom-4">
-                {copyFeedback}
+        {/* --- Macro Manager Modal --- */}
+        {isMacroModalOpen && (
+            <div className={`absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200`}>
+                <div className={`w-[500px] h-[600px] ${t.windowBg} border ${t.border} rounded-3xl shadow-2xl flex flex-col overflow-hidden`}>
+                    <div className={`px-6 py-4 border-b ${t.border} flex items-center justify-between ${t.panelBg}`}><h3 className={`text-sm font-bold uppercase tracking-widest ${t.textPrimary}`}>Macro Manager</h3><button onClick={() => setIsMacroModalOpen(false)} className={t.textTertiary}><X size={20} /></button></div>
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-3">
+                        {quickCommands.map((cmd, index) => (
+                            <div key={cmd.id} className={`flex items-center gap-3 p-3 rounded-xl border ${t.border} ${t.inputBg}`}>
+                                <div className={`flex flex-col flex-1 min-w-0`}>
+                                    {editingId === cmd.id ? (
+                                        <div className="flex flex-col gap-2"><input value={editLabel} onChange={e => setEditLabel(e.target.value)} className={`px-2 py-1 rounded border ${t.border} ${t.inputBg} ${t.textPrimary} text-xs outline-none focus:border-neutral-500`} placeholder="Label"/><input value={editCmdStr} onChange={e => setEditCmdStr(e.target.value)} className={`px-2 py-1 rounded border ${t.border} ${t.inputBg} ${t.textPrimary} text-xs outline-none focus:border-neutral-500 font-mono`} placeholder="Command"/></div>
+                                    ) : (
+                                        <><div className="flex items-center gap-2 mb-1">{index < 3 && <span className={`text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 font-bold uppercase`}>Fixed</span>}<span className={`text-xs font-bold ${t.textPrimary}`}>{cmd.label}</span></div><code className={`text-[10px] ${t.textTertiary} truncate`}>{cmd.cmd}</code></>
+                                    )}
+                                </div>
+                                {editingId === cmd.id ? (<><button onClick={saveEdit} className={`p-2 rounded-lg ${t.accentFill} ${t.accentText} hover:opacity-90`}><Check size={14}/></button><button onClick={() => setEditingId(null)} className={`p-2 rounded-lg border ${t.border} ${t.hoverBg} ${t.textSecondary}`}><X size={14}/></button></>) : (<><button onClick={() => sendData(cmd.cmd)} className={`p-2 rounded-lg ${t.accentFill} ${t.accentText} hover:opacity-90`}><Send size={14}/></button><button onClick={() => startEditing(cmd)} className={`p-2 rounded-lg border ${t.border} ${t.hoverBg} ${t.textSecondary}`}><Edit2 size={14}/></button><button onClick={() => moveToTop(index)} disabled={index === 0} className={`p-2 rounded-lg border ${t.border} ${t.hoverBg} ${t.textSecondary} disabled:opacity-30`}><ArrowUp size={14}/></button><button onClick={() => deleteMacro(cmd.id)} className={`p-2 rounded-lg border ${t.border} hover:bg-rose-400/10 text-rose-400`}><Trash size={14}/></button></>)}
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
         )}
-      </div>
 
-      {/* Hardware Access Modal - Refined alignment */}
-      {isConnectModalOpen && (
-        <div className="absolute inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-xl animate-in fade-in duration-300">
-            <div className="w-[540px] bg-[#0c0c0e] border border-white/20 rounded-[2.5rem] shadow-2xl overflow-hidden ring-1 ring-white/10">
-                <div className="p-8 border-b border-white/10 flex items-center justify-between bg-zinc-900/40">
-                    <div className="flex items-center gap-5">
-                        <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shadow-inner">
-                            <Usb className="text-emerald-400" size={24} />
-                        </div>
-                        <div>
-                            <h3 className="font-black text-sm tracking-[0.3em] uppercase">Hardware Hub</h3>
-                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1 opacity-60">Authorize port sessions</p>
-                        </div>
+        {/* --- Snapshot Gallery Modal --- */}
+        {isSnapshotGalleryOpen && (
+            <div className={`absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200`}>
+                <div className={`w-[90vw] max-w-[1000px] h-[80vh] ${t.windowBg} border ${t.border} rounded-3xl shadow-2xl flex flex-col overflow-hidden`}>
+                    {/* Fixed Header Layout */}
+                    <div className={`px-8 pt-10 pb-4 border-b ${t.border} flex items-center justify-between ${t.panelBg}`}>
+                        <div className="flex items-center gap-3"><h3 className={`text-sm font-bold uppercase tracking-widest ${t.textPrimary}`}>Snapshot Gallery</h3><span className={`px-2 py-0.5 rounded-full ${t.inputBg} border ${t.border} text-[10px] ${t.textSecondary}`}>{snapshots.length} items</span></div>
+                        <button onClick={() => setIsSnapshotGalleryOpen(false)} className={t.textTertiary}><X size={20} /></button>
                     </div>
-                    <button onClick={() => setIsConnectModalOpen(false)} className="p-3 bg-white/5 hover:bg-rose-500/20 hover:text-rose-500 rounded-full text-zinc-500 transition-all border border-white/5 flex items-center justify-center"><X size={18} /></button>
-                </div>
-                
-                <div className="p-8 bg-black/20">
-                    <div className="relative group mb-8">
-                        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />
-                        <input type="text" placeholder="Filter authorized devices..." value={portSearchQuery} onChange={e => setPortSearchQuery(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-xs outline-none focus:border-emerald-500/40 transition-all shadow-inner tracking-wider" />
-                    </div>
-
-                    <div className="max-h-80 overflow-y-auto custom-scrollbar flex flex-col gap-4 pr-2">
-                        {availablePorts.length === 0 ? (
-                            <div className="text-center py-16">
-                                <Monitor size={64} className="mx-auto text-zinc-800 mb-6 opacity-30" />
-                                <div className="text-zinc-600 text-[10px] font-black tracking-[0.4em] uppercase opacity-40">No Hardware Linked</div>
-                            </div>
-                        ) : (
-                            availablePorts.map((p, i) => (
-                                <button key={i} onClick={() => openPort(p)} className="w-full text-left p-5 bg-zinc-900/40 border border-white/5 hover:border-emerald-500/50 rounded-3xl group transition-all flex items-center justify-between shadow-lg hover:bg-zinc-800/60">
-                                    <div className="flex items-center gap-6">
-                                        <div className="w-11 h-11 rounded-2xl bg-black/60 flex items-center justify-center group-hover:text-emerald-400 group-hover:bg-emerald-500/10 transition-all border border-white/5">
-                                            <Usb size={20} />
-                                        </div>
-                                        <div>
-                                            {/* Removed extra space between name and # symbol, and tightened tracking */}
-                                            <div className="text-[11px] font-black group-hover:text-emerald-400 transition-colors uppercase tracking-tighter leading-none">Endpoint#{i+1}</div>
-                                            <div className="text-[10px] font-mono text-zinc-500 mt-2 uppercase tracking-tight opacity-70">VID:{p.getInfo().usbVendorId?.toString(16).padStart(4,'0') || '0000'} &nbsp; PID:{p.getInfo().usbProductId?.toString(16).padStart(4,'0') || '0000'}</div>
-                                        </div>
+                    {/* Fixed Grid Layout (md:grid-cols-3) */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-8 grid grid-cols-2 md:grid-cols-3 gap-6 content-start">
+                        {snapshots.map(s => (
+                            <div key={s.id} className={`group relative rounded-2xl border ${t.border} overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 bg-black/5`}>
+                                <div className="aspect-video relative overflow-hidden bg-white/5">
+                                    <img src={s.url} alt="Snapshot" className="w-full h-full object-contain" />
+                                </div>
+                                <div className={`px-4 py-3 border-t ${t.border} ${t.panelBg} flex items-center justify-between`}>
+                                    <div className="flex flex-col">
+                                        <span className={`text-[10px] font-bold ${t.textPrimary}`}>Snapshot #{s.id.toString().slice(-4)}</span>
+                                        <span className={`text-[9px] ${t.textTertiary}`}>{s.timestamp}</span>
                                     </div>
-                                    <ChevronRight size={20} className="text-zinc-800 group-hover:text-emerald-400 transition-all group-hover:translate-x-2" />
-                                </button>
-                            ))
-                        )}
+                                    <div className="flex gap-2">
+                                         <a href={s.url} download={`snapshot-${s.id}.png`} className={`p-2 rounded-lg border ${t.border} hover:${t.hoverBg} ${t.textPrimary}`} title="Download Image"><FileDown size={14}/></a>
+                                         <button onClick={() => setSnapshots(prev => prev.filter(snap => snap.id !== s.id))} className={`p-2 rounded-lg border ${t.border} hover:bg-rose-500/10 text-rose-500`} title="Delete"><Trash size={14}/></button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        {snapshots.length === 0 && <div className={`col-span-1 md:col-span-3 py-20 text-center ${t.textTertiary} text-sm flex flex-col items-center gap-3 opacity-50`}><Camera size={48} strokeWidth={1} /><span>Gallery is empty. Capture snapshots from the monitor view.</span></div>}
                     </div>
-                </div>
-
-                <div className="p-8 bg-[#0a0a0c] border-t border-white/10">
-                    <button 
-                      onClick={() => {
-                        navigator.serial.requestPort()
-                          .then(p => {
-                            openPort(p);
-                            updatePorts();
-                          })
-                          .catch(() => {});
-                      }} 
-                      className="w-full py-5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[1.5rem] text-[11px] font-black tracking-[0.4em] transition-all shadow-2xl shadow-emerald-900/40 flex items-center justify-center gap-4 hover:scale-[1.01] active:scale-98"
-                    >
-                        <Search size={20} /> SCAN FOR HARDWARE
-                    </button>
+                    <div className={`px-8 py-4 border-t ${t.border} ${t.panelBg} flex justify-end gap-3`}>
+                        <button onClick={() => setSnapshots([])} className={`px-5 py-2.5 text-xs text-rose-500 hover:bg-rose-500/10 rounded-xl transition-colors font-medium`}>Clear Gallery</button>
+                        <button onClick={handleViewReport} className={`px-6 py-2.5 rounded-xl border ${t.border} ${t.textSecondary} hover:${t.textPrimary} hover:${t.hoverBg} text-xs font-bold flex items-center gap-2 transition-all`}><ExternalLink size={14}/> View HTML</button>
+                        <button onClick={handleExportPdf} disabled={snapshots.length===0} className={`px-6 py-2.5 ${t.accentFill} ${t.accentText} text-xs font-bold rounded-xl shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 active:scale-95 transition-all`}><FileText size={14}/> Export PDF</button>
+                    </div>
                 </div>
             </div>
-        </div>
-      )}
+        )}
 
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 3px; height: 3px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(16, 185, 129, 0.08); border-radius: 10px; border: 1px solid transparent; background-clip: padding-box; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(16, 185, 129, 0.25); }
-      `}</style>
+        {isConnectModalOpen && (
+            <div className={`absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200`}>
+                <div className={`w-[420px] ${t.windowBg} border ${t.border} rounded-3xl shadow-2xl p-8`}>
+                    <div className="flex items-center justify-between mb-8"><h3 className={`text-sm font-bold uppercase tracking-widest ${t.textPrimary}`}>Hardware Connection</h3><button onClick={() => setIsConnectModalOpen(false)} className={t.textTertiary}><X size={20} /></button></div>
+                    <div className="space-y-2 mb-8 max-h-[240px] overflow-y-auto custom-scrollbar">
+                        {!isWebSerialSupported ? (<div className={`text-center py-8 bg-rose-500/10 border border-rose-500/20 rounded-xl`}><div className="text-rose-500 font-bold text-xs mb-1">BROWSER NOT SUPPORTED</div></div>) : !isSerialAllowed ? (<div className={`text-center py-8 bg-amber-500/10 border border-amber-500/20 rounded-xl`}><div className="text-amber-500 font-bold text-xs mb-1">PERMISSION BLOCKED</div></div>) : availablePorts.length === 0 ? (<div className={`text-center py-10 border-2 border-dashed ${t.border} rounded-2xl opacity-60`}><div className={`text-xs ${t.textTertiary} font-bold`}>NO GRANTED DEVICES</div><div className={`text-[10px] ${t.textTertiary} mt-2`}>Click SCAN below to authorize a device</div></div>) : availablePorts.map((p, i) => (
+                            <button key={i} onClick={() => openPort(p)} className={`w-full flex items-center gap-4 p-4 rounded-2xl border ${t.border} ${t.hoverBg} text-left group transition-all`}>
+                                <div className={`size-10 rounded-full flex items-center justify-center ${t.inputBg} border ${t.border} group-hover:border-neutral-500/50 transition-colors`}><Usb size={18} className={t.textPrimary}/></div>
+                                <div><div className={`text-xs font-bold ${t.textPrimary}`}>PORT {i+1}</div><div className={`text-[10px] font-mono ${t.textTertiary}`}>ID: {p.getInfo().usbVendorId?.toString(16)}:{p.getInfo().usbProductId?.toString(16)}</div></div>
+                            </button>
+                        ))}
+                    </div>
+                    <button onClick={() => { navigator.serial.requestPort().then(p => { openPort(p); updatePorts(); }).catch((e)=>{console.log(e)}); }} disabled={!isWebSerialSupported || !isSerialAllowed} className={`w-full py-3.5 ${t.accentFill} ${t.accentText} ${t.accentHover} rounded-xl text-xs font-bold tracking-widest uppercase hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md`}>SCAN FOR DEVICES</button>
+                </div>
+            </div>
+        )}
+
+        {copyFeedback && (<div className={`absolute bottom-8 left-8 px-5 py-2.5 ${t.accentFill} ${t.accentText} text-[11px] font-bold tracking-widest uppercase rounded-full shadow-2xl z-[110] animate-in fade-in slide-in-from-bottom-2`}>{copyFeedback}</div>)}
+      </div>
     </div>
   );
 }

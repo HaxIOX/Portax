@@ -1,82 +1,93 @@
-# SerialFlux Pro - 下一代 Web 串口调试助手 ⚡
+# Portax
 
-**SerialFlux Pro** 是一个基于 Web 技术构建的现代化、高颜值、功能强大的串口调试工具。它采用了“模拟桌面窗口”的沉浸式设计风格，结合了极光流光特效与磨砂玻璃质感，旨在为嵌入式开发者提供极致的调试体验。
+[English](./README.md) | [中文](./README_CN.md)
 
-*(注：此处可替换为实际截图)*
+A modern, feature-rich web-based serial port debugging tool with an elegant UI and powerful functionality.
 
-## ✨ 核心特性
+![Portax Demo](assets/image-20260113223119750.png)
 
-### 🎨 极致 UI/UX 设计
+## ✨ Features
 
-- **模拟桌面窗口**：悬浮于极光网格背景之上的独立窗口，还原原生应用体验。
-- **工业级质感**：深色磨砂玻璃面板，配以金属边框光效与精细的螺丝孔位装饰。
-- **动态交互**：流光边框、呼吸灯状态指示、细腻的按钮反馈动画。
+- **Beautiful UI** - Clean interface with dark/light theme support
+- **Keyword Highlighting** - Customizable keyword highlighting with color configuration
+- **⚡ Quick Commands** - Save and manage frequently used commands with persistent storage
+- **Command History** - Navigate through send history using `↑` / `↓` keys
+- **Data Filtering** - Real-time log search and filtering
+- **RX/TX Monitoring** - Dynamic RX/TX indicators with breathing light effects
+- **Waveform Plotting** - Visualize serial data with real-time charts (beta)
+- **Snapshot & Export** - Capture waveform snapshots and export to PDF reports
 
-### 🛠️ 强大的调试功能
+## 🚀 Quick Start
 
-- **全平台支持**：基于 Chromium 内核浏览器（Chrome, Edge），免驱动安装，即插即用。
-- **多格式支持**：
-  - **HEX/ASCII**：接收与发送均支持一键切换十六进制与文本模式。
-  - **多编码**：支持 UTF-8 与 GBK 编码切换（需底层支持，当前演示为 UTF-8）。
-  - **行尾符控制**：可选 `\n`, `\r`, `\r\n` 或无行尾符。
-- **高级发送**：
-  - **CRC 校验**：支持自动追加 Modbus CRC16 校验码。
-  - **快捷指令**：可自定义、持久化保存的快捷指令组，支持快速点击发送。
-  - **历史回溯**：支持通过键盘 `↑` / `↓` 键回溯发送历史。
-
-### ⚡ 性能与便捷
-
-- **数据持久化**：波特率、高亮关键词、快捷指令等配置自动保存到本地（LocalStorage）。
-- **智能过滤**：支持实时日志搜索与过滤，快速定位关键信息。
-- **关键词高亮**：支持自定义关键词高亮及颜色配置。
-- **RX/TX 监控**：底部状态栏集成动态呼吸灯，实时反馈数据收发状态。
-
-## 🚀 快速开始
-
-### 环境要求
+### Prerequisites
 
 - Node.js 16+
-- 支持 Web Serial API 的浏览器（Chrome 89+, Edge 89+, Opera）
+- Modern browser with Web Serial API support (Chrome 89+, Edge 89+)
 
-### 安装步骤
+### Installation
 
-1. **克隆项目**
+```bash
+# Clone the repository
+git clone https://github.com/HaxIOX/Portax.git
+cd portax
 
-   ```
-   git clone [https://github.com/your-username/serial-flux-pro.git](https://github.com/your-username/serial-flux-pro.git)
-   cd serial-flux-pro
-   ```
+# Install dependencies
+npm install
 
-2. **安装依赖**
+# Start development server
+npm run dev
+```
 
-   ```
-   npm install
-   # 必须安装图标库
-   npm install lucide-react
-   ```
+### Build for Production
 
-3. **启动开发服务器**
+```bash
+npm run build
+```
 
-   ```
-   npm run dev
-   ```
+## 📸 Screenshots
 
-4. **访问** 打开浏览器访问 `http://localhost:5173`。
+**Main Interface**
+![Interface](assets/image-20260113223119750.png)
 
-## 📦 技术栈
+**Command Management**
+![Commands](assets/image-20260113223127271.png)
 
-- **框架**: [React 18](https://react.dev/)
-- **构建工具**: [Vite](https://vitejs.dev/)
-- **样式**: [Tailwind CSS](https://tailwindcss.com/)
-- **图标**: [Lucide React](https://lucide.dev/)
-- **核心 API**: [Web Serial API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API)
+**Waveform Monitor**
+![Waveform](assets/image-20260113223132043.png)
 
-## ⚠️ 注意事项
+**Data Export**
+![Export](assets/image-20260113223136669.png)
 
-1. **HTTPS 限制**：Web Serial API 出于安全考虑，仅在 `localhost` 或 `https://` 协议下可用。
-2. **驱动问题**：虽然 Web 端免驱，但操作系统层面仍需安装对应的 USB 转串口芯片驱动（如 CH340, CP2102）。
-3. **浏览器权限**：首次连接设备时，必须通过浏览器原生的弹窗授权设备。这是浏览器的安全机制，无法绕过。
+## 🛠️ Technology Stack
+
+- **Framework**: React 18
+- **Build Tool**: Vite
+- **Styling**: Tailwind CSS
+- **Icons**: Lucide React
+- **Core API**: Web Serial API
+
+## ⚠️ Important Notes
+
+1. **HTTPS Required** - Web Serial API only works on `localhost` or `https://` due to security requirements
+2. **USB Drivers** - USB-to-serial chip drivers (e.g., CH340, CP2102) must be installed on your OS
+3. **Browser Permissions** - Device access requires user authorization via browser dialog
+
+## 🗺️ Roadmap
+
+- [ ] Optimize waveform chart performance
+- [ ] Windows desktop client
+- [ ] Support for additional protocols (Modbus, CANbus, etc.)
+- [ ] Multi-language support
+- [ ] Plugin system
 
 ## 📄 License
 
-MIT License# serial-flux
+GNU GPL v3.0
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome! Visit the [Issues page](https://github.com/HaxIOX/Portax/issues).
+
+---
+
+Made with ❤️ using React and Web Serial API
