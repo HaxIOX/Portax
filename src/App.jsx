@@ -43,6 +43,10 @@ const bufferToHex = (buffer) => {
 };
 
 // --- Component: Multi-Series Waveform Chart ---
+const RX_LINE_SPLIT_RE = /\r\n|\n|\r|\\r\\n|\\r|\\n/;
+const RX_IDLE_FLUSH_MS = 150;
+const RX_MAX_LINE_LENGTH = 4096;
+const RX_HINTS_ENABLED = true;
 const SERIES_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ec4899']; 
 const isValidNumber = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -403,6 +407,8 @@ export default function App() {
   const pendingRxLinesRef = useRef([]);
   const pausedBufferRef = useRef(''); // Buffer for data received while paused
   const rxTimeoutRef = useRef(null);
+  const rxIdleTimerRef = useRef(null);
+  const rxHintFlagsRef = useRef({ idle: false, maxLen: false });
   const logContainerRef = useRef(null);
 
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
@@ -503,12 +509,22 @@ export default function App() {
     setTimerEnabled(false);
     if (timerRef.current) clearInterval(timerRef.current);
     if (rxTimeoutRef.current) { clearTimeout(rxTimeoutRef.current); rxTimeoutRef.current = null; }
+    if (rxIdleTimerRef.current) { clearTimeout(rxIdleTimerRef.current); rxIdleTimerRef.current = null; }
+    const reader = readerRef.current;
+    readerRef.current = null;
+    const closed = readableStreamClosedRef.current;
+    readableStreamClosedRef.current = null;
+    const currentPort = portRef.current;
     try {
-      if (readerRef.current) await readerRef.current.cancel();
-      const closed = readableStreamClosedRef.current;
-      readableStreamClosedRef.current = null;
+      if (reader) await reader.cancel();
+    } catch {}
+    try {
+      if (reader) reader.releaseLock();
+    } catch {}
+    try {
       if (closed) await closed.catch(() => {});
-      const currentPort = portRef.current;
+    } catch {}
+    try {
       if (currentPort) await currentPort.close();
     } catch (e) { console.error(e); }
     setPort(null);
@@ -517,6 +533,7 @@ export default function App() {
     rxBufferRef.current = '';
     pendingRxLinesRef.current = [];
     pausedBufferRef.current = '';
+    rxHintFlagsRef.current = { idle: false, maxLen: false };
     closingRef.current = false;
     updatePorts();
   }, [updatePorts]);
@@ -585,10 +602,26 @@ export default function App() {
       addLogRef.current = addLog;
   }, [addLog]);
 
+  const clearRxIdleTimer = useCallback(() => {
+      if (rxIdleTimerRef.current) {
+          clearTimeout(rxIdleTimerRef.current);
+          rxIdleTimerRef.current = null;
+      }
+  }, []);
+
+  const logSystemMessage = useCallback((text, flagKey = null) => {
+      if (!RX_HINTS_ENABLED) return;
+      if (flagKey && rxHintFlagsRef.current[flagKey]) return;
+      if (flagKey) rxHintFlagsRef.current[flagKey] = true;
+      addLog({ id: Math.random(), timestamp: getTimestamp(), text, type: 'sys' });
+  }, [addLog, getTimestamp]);
+
   // Batch append framed RX lines: reduces React state churn under high baud/data rate.
   const appendRxLines = useCallback((lines) => {
+      console.log('[DEBUG] appendRxLines called with', lines.length, 'lines');
       const safeLines = Array.isArray(lines) ? lines : [];
       const filtered = safeLines.map(l => (typeof l === 'string' ? l.trim() : '')).filter(Boolean);
+      console.log('[DEBUG] Filtered to', filtered.length, 'non-empty lines');
       if (filtered.length === 0) return;
 
       // 1) Logs (single state update)
@@ -621,22 +654,72 @@ export default function App() {
       }, 16); // ~60fps batching
   }, []);
 
+  const scheduleIdleFlush = useCallback(() => {
+      if (!RX_IDLE_FLUSH_MS || RX_IDLE_FLUSH_MS <= 0) return;
+      clearRxIdleTimer();
+      rxIdleTimerRef.current = setTimeout(() => {
+          rxIdleTimerRef.current = null;
+          if (isPausedRef.current) return;
+          const buffered = rxBufferRef.current;
+          if (!buffered) return;
+          rxBufferRef.current = '';
+          if (buffered.trim()) {
+              pendingRxLinesRef.current.push(buffered);
+              scheduleFlushRxLines();
+              logSystemMessage(`Detected data without line ending; flushed after ${RX_IDLE_FLUSH_MS}ms idle.`, 'idle');
+          }
+      }, RX_IDLE_FLUSH_MS);
+  }, [clearRxIdleTimer, logSystemMessage, scheduleFlushRxLines]);
+
   const enqueueRxText = useCallback((text) => {
       if (!text) return;
+      console.log('[DEBUG] enqueueRxText called, text length:', text.length, 'buffer before:', rxBufferRef.current.length);
+      // Debug: show actual character codes
+      const lastChars = text.slice(-10);
+      const charCodes = Array.from(lastChars).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
+      console.log('[DEBUG] Last 10 chars codes:', charCodes, 'chars:', JSON.stringify(lastChars));
+
       rxBufferRef.current += text;
 
       // Frame: one line = one sample (Arduino Serial Plotter style).
-      const parts = rxBufferRef.current.split(/\r?\n/);
-      rxBufferRef.current = parts.pop() ?? '';
+      // Support multiple line ending formats:
+      // 1. Real line breaks: \r\n (0x0D 0x0A), \n (0x0A), \r (0x0D)
+      // 2. Literal string: \\r\\n (backslash-r-backslash-n)
+      const parts = rxBufferRef.current.split(RX_LINE_SPLIT_RE);
+      const popped = parts.pop() ?? '';
+      rxBufferRef.current = popped;
 
+      console.log('[DEBUG] Split into', parts.length, 'parts, remaining buffer:', rxBufferRef.current.length, 'chars:', JSON.stringify(rxBufferRef.current.slice(-20)));
       if (parts.length) {
           // Keep raw content (minus linebreak), ignore empty lines.
           for (const line of parts) {
-              if (line && line.trim()) pendingRxLinesRef.current.push(line);
+              if (line && line.trim()) {
+                  console.log('[DEBUG] Adding line to queue:', JSON.stringify(line));
+                  pendingRxLinesRef.current.push(line);
+              }
           }
+          console.log('[DEBUG] Pending lines:', pendingRxLinesRef.current.length);
           scheduleFlushRxLines();
       }
-  }, [scheduleFlushRxLines]);
+
+      let forcedSplit = false;
+      while (rxBufferRef.current.length > RX_MAX_LINE_LENGTH) {
+          const chunk = rxBufferRef.current.slice(0, RX_MAX_LINE_LENGTH);
+          rxBufferRef.current = rxBufferRef.current.slice(RX_MAX_LINE_LENGTH);
+          if (chunk.trim()) pendingRxLinesRef.current.push(chunk);
+          forcedSplit = true;
+      }
+      if (forcedSplit) {
+          scheduleFlushRxLines();
+          logSystemMessage(`Line exceeded ${RX_MAX_LINE_LENGTH} chars; forced split.`, 'maxLen');
+      }
+
+      if (rxBufferRef.current.length) {
+          scheduleIdleFlush();
+      } else {
+          clearRxIdleTimer();
+      }
+  }, [clearRxIdleTimer, logSystemMessage, scheduleFlushRxLines, scheduleIdleFlush]);
 
   // --- Flush buffer when unpaused ---
   useEffect(() => {
@@ -699,6 +782,7 @@ export default function App() {
 
   // --- Read Loop with Caching Logic ---
   const readLoop = async (selectedPort) => {
+    console.log('[DEBUG] readLoop started, encoding:', encoding);
     const textDecoder = new TextDecoderStream(encoding);
     const readableStreamClosed = selectedPort.readable.pipeTo(textDecoder.writable);
     readableStreamClosedRef.current = readableStreamClosed;
@@ -709,9 +793,11 @@ export default function App() {
       while (true) {
         const { value, done } = await reader.read();
         if (done) {
+          console.log('[DEBUG] reader.read() done');
           break;
         }
         if (value) {
+          console.log('[DEBUG] Received data:', value.length, 'chars, isPaused:', isPausedRef.current, 'preview:', value.substring(0, 50));
           // If paused, accumulate in pausedBufferRef
           if (isPausedRef.current) {
               pausedBufferRef.current += value;
@@ -725,6 +811,7 @@ export default function App() {
       // Cancel/close is expected during disconnect; avoid noisy logs.
       if (!closingRef.current) console.error("Read Error: ", error);
     } finally {
+      console.log('[DEBUG] readLoop ended');
       try { reader.releaseLock(); } catch {}
       if (readerRef.current === reader) readerRef.current = null;
       try { await readableStreamClosed; } catch {}
@@ -733,15 +820,20 @@ export default function App() {
   };
 
   const openPort = async (selectedPort) => {
+    console.log('[DEBUG] openPort called, baudRate:', baudRate);
     try {
       await selectedPort.open({ baudRate: parseInt(baudRate) || 115200 });
+      console.log('[DEBUG] Port opened successfully');
       setPort(selectedPort);
       portRef.current = selectedPort;
       setIsConnected(true);
       setIsConnectModalOpen(false);
       closingRef.current = false;
       readLoop(selectedPort);
-    } catch (error) { alert(`Connection failed: ${error.message}`); }
+    } catch (error) {
+      console.error('[DEBUG] Port open failed:', error);
+      alert(`Connection failed: ${error.message}`);
+    }
   };
 
   const sendData = async (textOverride = null) => {
@@ -1181,7 +1273,6 @@ export default function App() {
   return (
     <div className={`flex h-screen w-full items-center justify-center ${t.pageBg} ${t.textPrimary} font-sans selection:bg-emerald-500/30 overflow-hidden relative transition-colors duration-500`}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
         .font-sans { font-family: 'Inter', system-ui, sans-serif; letter-spacing: -0.01em; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -1258,16 +1349,31 @@ export default function App() {
                             {!isWebSerialSupported && <div className="mt-2 text-rose-500 text-[10px]">Browser Not Supported</div>}
                         </div>
                     ) : (
-                        <div className="flex flex-col gap-2"> 
-                            {logs.filter(l => !logFilter || String(l.text).toLowerCase().includes(logFilter.toLowerCase())).map((log) => (
-                                <div key={log.id} onClick={() => navigator.clipboard.writeText(String(log.text))} className={`flex gap-3 px-3 py-1 items-start rounded-lg cursor-pointer hover:${t.hoverBg} group transition-colors`}>
-                                    {showTimestamp && <span className={`shrink-0 text-[11px] ${t.textTertiary} select-none font-medium opacity-60 pt-[2px]`}>{log.timestamp}</span>}
-                                    {/* Kept w-10 but ensured no flex shrinkage */}
-                                    <span className={`shrink-0 text-[10px] font-bold w-10 text-center select-none rounded border px-0.5 pt-0.5 mt-[1px] ${log.type === 'tx' ? (isDark ? 'text-blue-400 border-blue-400/50' : 'text-blue-600 border-blue-600/30') : (isDark ? 'text-emerald-400 border-emerald-400/50' : 'text-emerald-600 border-emerald-600/30')}`}>{log.type === 'tx' ? 'TX' : 'RX'}</span>
-                                    {/* Added min-w-0 to prevent text overflow issues */}
-                                    <span className={`break-all whitespace-pre-wrap min-w-0 ${log.type === 'tx' ? (isDark ? 'text-blue-400' : 'text-blue-600') : (isDark ? 'text-emerald-400' : 'text-emerald-600')} opacity-90`}>{renderContent(log.text)}</span>
-                                </div>
-                            ))}
+                        <div className="flex flex-col gap-2">
+                            {logs.filter(l => !logFilter || String(l.text).toLowerCase().includes(logFilter.toLowerCase())).map((log) => {
+                                const isTx = log.type === 'tx';
+                                const isSys = log.type === 'sys';
+                                const badgeClass = isTx
+                                    ? (isDark ? 'text-blue-400 border-blue-400/50' : 'text-blue-600 border-blue-600/30')
+                                    : isSys
+                                        ? (isDark ? 'text-amber-400 border-amber-400/50' : 'text-amber-600 border-amber-600/30')
+                                        : (isDark ? 'text-emerald-400 border-emerald-400/50' : 'text-emerald-600 border-emerald-600/30');
+                                const textClass = isTx
+                                    ? (isDark ? 'text-blue-400' : 'text-blue-600')
+                                    : isSys
+                                        ? (isDark ? 'text-amber-400' : 'text-amber-600')
+                                        : (isDark ? 'text-emerald-400' : 'text-emerald-600');
+                                const label = isTx ? 'TX' : isSys ? 'SYS' : 'RX';
+                                return (
+                                    <div key={log.id} onClick={() => navigator.clipboard.writeText(String(log.text))} className={`flex gap-3 px-3 py-1 items-start rounded-lg cursor-pointer hover:${t.hoverBg} group transition-colors`}>
+                                        {showTimestamp && <span className={`shrink-0 text-[11px] ${t.textTertiary} select-none font-medium opacity-60 pt-[2px]`}>{log.timestamp}</span>}
+                                        {/* Kept w-10 but ensured no flex shrinkage */}
+                                        <span className={`shrink-0 text-[10px] font-bold w-10 text-center select-none rounded border px-0.5 pt-0.5 mt-[1px] ${badgeClass}`}>{label}</span>
+                                        {/* Added min-w-0 to prevent text overflow issues */}
+                                        <span className={`break-all whitespace-pre-wrap min-w-0 ${textClass} opacity-90`}>{renderContent(log.text)}</span>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
