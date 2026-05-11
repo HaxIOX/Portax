@@ -724,13 +724,13 @@ export default function App() {
               <button onClick={() => setIsMainMenuOpen(!isMainMenuOpen)} className={`p-1.5 rounded-lg hover:${t.hoverBg} ${t.textSecondary} transition-colors`}><Menu size={18} /></button>
               {isMainMenuOpen && (
                 <div className={`absolute top-full left-0 mt-2 w-48 rounded-xl border ${t.border} ${t.windowBg} shadow-xl py-2 z-[100] flex flex-col`}>
-                  <div className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest ${t.textTertiary}`}>View</div>
-                  <button onClick={() => { setIsPlotterOpen(false); setIsMainMenuOpen(false); }} className={`px-4 py-2 text-left text-xs hover:${t.hoverBg} flex items-center gap-2 ${!isPlotterOpen ? 'text-emerald-500' : t.textPrimary}`}><Terminal size={14} /> Terminal</button>
-                  <button onClick={() => { setIsPlotterOpen(true); setIsMainMenuOpen(false); }} className={`px-4 py-2 text-left text-xs hover:${t.hoverBg} flex items-center gap-2 ${isPlotterOpen ? 'text-emerald-500' : t.textPrimary}`}><LineChart size={14} /> Monitor</button>
+                  <div className={`px-4 py-2 text-xs font-bold uppercase tracking-widest ${t.textTertiary}`}>View</div>
+                  <button onClick={() => { setIsPlotterOpen(false); setIsMainMenuOpen(false); }} className={`px-4 py-2 text-left text-sm hover:${t.hoverBg} flex items-center gap-2 ${!isPlotterOpen ? 'text-emerald-500' : t.textPrimary}`}><Terminal size={14} /> Terminal</button>
+                  <button onClick={() => { setIsPlotterOpen(true); setIsMainMenuOpen(false); }} className={`px-4 py-2 text-left text-sm hover:${t.hoverBg} flex items-center gap-2 ${isPlotterOpen ? 'text-emerald-500' : t.textPrimary}`}><LineChart size={14} /> Monitor</button>
                   <div className={`h-px ${t.border} my-1`}></div>
-                  <div className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest ${t.textTertiary}`}>Tools</div>
-                  <button onClick={() => { simulateRxData(); setIsMainMenuOpen(false); }} className={`px-4 py-2 text-left text-xs hover:${t.hoverBg} flex items-center gap-2 ${t.textPrimary}`}><Zap size={14} /> Simulate RX</button>
-                  <button onClick={() => { handleExportLogs(); setIsMainMenuOpen(false); }} className={`px-4 py-2 text-left text-xs hover:${t.hoverBg} flex items-center gap-2 ${t.textPrimary}`}><Download size={14} /> Export CSV</button>
+                  <div className={`px-4 py-2 text-xs font-bold uppercase tracking-widest ${t.textTertiary}`}>Tools</div>
+                  <button onClick={() => { simulateRxData(); setIsMainMenuOpen(false); }} className={`px-4 py-2 text-left text-sm hover:${t.hoverBg} flex items-center gap-2 ${t.textPrimary}`}><Zap size={14} /> Simulate RX</button>
+                  <button onClick={() => { handleExportLogs(); setIsMainMenuOpen(false); }} className={`px-4 py-2 text-left text-sm hover:${t.hoverBg} flex items-center gap-2 ${t.textPrimary}`}><Download size={14} /> Export CSV</button>
                 </div>
               )}
             </div>
@@ -749,12 +749,12 @@ export default function App() {
             <div className={`h-12 border-b ${t.border} flex items-center px-6 gap-4 ${t.panelBg}`}>
               <div className={`flex items-center gap-2 pl-3 pr-4 py-1.5 rounded-full border transition-all duration-300 ${isConnected ? 'border-emerald-500/30 bg-emerald-500/5' : `${t.border} bg-transparent`}`}>
                 <div className="relative flex items-center justify-center size-2.5"><Activity size={14} className={`${isConnected ? 'text-emerald-500 animate-pulse' : t.textTertiary}`} /></div>
-                <span className={`text-xs font-bold uppercase tracking-wider ${isConnected ? 'text-emerald-500' : t.textTertiary}`}>{isConnected ? 'Connected' : 'Offline'}</span>
+                <span className={`text-sm font-bold uppercase tracking-wider ${isConnected ? 'text-emerald-500' : t.textTertiary}`}>{isConnected ? 'Connected' : 'Offline'}</span>
               </div>
               <div className={`h-5 w-px ${isDark ? 'bg-white/10' : 'bg-black/10'}`}></div>
               <div className="flex-1 flex items-center gap-3">
                 <Filter size={14} className={t.textTertiary} />
-                <input value={logFilter} onChange={e => setLogFilter(e.target.value)} placeholder="Search logs..." className={`bg-transparent border-none outline-none text-xs font-medium w-full ${t.textPrimary} placeholder:${t.textTertiary}`} />
+                <input value={logFilter} onChange={e => setLogFilter(e.target.value)} placeholder="Search logs..." className={`bg-transparent border-none outline-none text-sm font-medium w-full ${t.textPrimary} placeholder:${t.textTertiary}`} />
               </div>
               <div className={`flex border ${t.border} rounded-full p-1 ${t.inputBg}`}>
                 <button onClick={() => setViewMode('ascii')} className={`px-4 py-1 rounded-full text-[10px] font-bold transition-all ${viewMode === 'ascii' ? `${t.accentFill} ${t.accentText} shadow-sm` : `${t.textSecondary} hover:${t.textPrimary}`}`}>TXT</button>

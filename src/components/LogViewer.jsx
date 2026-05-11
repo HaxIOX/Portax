@@ -25,11 +25,11 @@ const LogEntry = memo(({ log, showTimestamp, isDark, textTheme, renderContent, o
       className={`flex gap-3 px-3 py-1 items-start rounded-lg cursor-pointer hover:${textTheme.hoverBg} group transition-colors`}
     >
       {showTimestamp && (
-        <span className={`shrink-0 text-[11px] ${textTheme.textTertiary} select-none font-medium opacity-60 pt-[2px]`}>
+        <span className={`shrink-0 text-xs ${textTheme.textTertiary} select-none font-medium opacity-60 pt-[2px]`}>
           {log.timestamp}
         </span>
       )}
-      <span className={`shrink-0 text-[10px] font-bold w-10 text-center select-none rounded border px-0.5 pt-0.5 mt-[1px] ${badgeClass}`}>
+      <span className={`shrink-0 text-xs font-bold w-10 text-center select-none rounded border px-0.5 pt-0.5 mt-[1px] ${badgeClass}`}>
         {label}
       </span>
       <span className={`break-all whitespace-pre-wrap min-w-0 ${textClass} opacity-90`}>
@@ -66,7 +66,7 @@ const LogViewer = ({
           Ready to Receive
         </span>
         {!isWebSerialSupported && (
-          <div className="mt-2 text-rose-500 text-[10px]">Browser Not Supported</div>
+          <div className="mt-2 text-rose-500 text-xs">Browser Not Supported</div>
         )}
       </div>
     );
