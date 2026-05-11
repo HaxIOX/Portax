@@ -768,7 +768,7 @@ export default function App() {
 
             {/* Split Content */}
             <div className="flex-1 flex flex-col min-h-0 relative">
-              <div className={`flex-1 p-6 overflow-y-auto custom-scrollbar font-mono text-[12px] leading-relaxed transition-all duration-300 ${isPlotterOpen ? 'basis-2/3' : 'basis-full'}`}>
+              <div ref={logContainerRef} className={`flex-1 p-6 overflow-y-auto custom-scrollbar font-mono text-sm leading-relaxed transition-all duration-300 ${isPlotterOpen ? 'basis-2/3' : 'basis-full'}`}>
                 <LogViewer
                   logs={logs}
                   logFilter={logFilter}
